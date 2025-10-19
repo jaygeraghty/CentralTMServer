@@ -227,6 +227,8 @@ class CIFParser:
                 logger.info(f"Test file detected, bypassing 'already processed' check: {file_path}")
             elif db.session.query(ParsedFile).filter_by(file_ref=current_file_ref).first():
                 logger.info(f"File already processed (ref: {current_file_ref}): {file_path}")
+                # Clean up any implicit transaction opened by the read-only query
+                db.session.rollback()
                 shutil.move(file_path, os.path.join(ARCHIVE_DIR, os.path.basename(file_path)))
                 return
 
@@ -242,25 +244,34 @@ class CIFParser:
                     f"File sequence mismatch: expected previous file {last_processed_ref}, "
                     f"but this file references {last_file_ref} as previous. Skipping: {file_path}"
                 )
+                db.session.rollback()
                 return
 
-            # Process file based on extract type
-            if extract_type == 'F':  # Full extract
-                self.process_full_extract(file_path, current_file_ref)
-            elif extract_type == 'U':  # Update
-                self.process_update_extract(file_path, current_file_ref)
-            else:
-                logger.error(f"Unknown extract type '{extract_type}': {file_path}")
-                return
+            # Ensure we start with a clean transaction state before wrapping the
+            # data load in an explicit transaction scope. SQLAlchemy sessions
+            # automatically open a transaction on the first query; any of the
+            # checks above may have triggered that, so roll back to clear it.
+            db.session.rollback()
 
-            # Record processed file and move to archive
-            processed_file = ParsedFile()
-            processed_file.file_ref = current_file_ref
-            processed_file.extract_type = extract_type
-            processed_file.processed_at = datetime.now()
-            processed_file.filename = os.path.basename(file_path)
-            db.session.add(processed_file)
-            db.session.commit()
+            with db.session.begin():
+                # Process file based on extract type
+                if extract_type == 'F':  # Full extract
+                    self.process_full_extract(file_path, current_file_ref)
+                elif extract_type == 'U':  # Update
+                    self.process_update_extract(file_path, current_file_ref)
+                else:
+                    logger.error(f"Unknown extract type '{extract_type}': {file_path}")
+                    return
+
+                self.load_file_data(file_path)
+
+                # Record processed file
+                processed_file = ParsedFile()
+                processed_file.file_ref = current_file_ref
+                processed_file.extract_type = extract_type
+                processed_file.processed_at = datetime.now()
+                processed_file.filename = os.path.basename(file_path)
+                db.session.add(processed_file)
 
             # Move file to archive
             archive_path = os.path.join(ARCHIVE_DIR, os.path.basename(file_path))
@@ -269,10 +280,11 @@ class CIFParser:
 
         except Exception as e:
             logger.exception(f"Error processing file {file_path}: {str(e)}")
+            db.session.rollback()
 
     def process_full_extract(self, file_path: str, file_ref: str):
         """
-        Process a full extract CIF file.
+        Prepare the database for a full extract CIF file by truncating existing data.
 
         Args:
             file_path: Path to the CIF file
@@ -281,44 +293,33 @@ class CIFParser:
         logger.info(f"Processing full extract file: {file_path}")
 
         # Use raw SQL for truncation without nested transactions
-        try:
-            # First reset the session to ensure no transaction is active
-            db.session.rollback()
+        # Truncate legacy tables
+        db.session.execute(db.text("TRUNCATE TABLE schedule_locations CASCADE"))
+        db.session.execute(db.text("TRUNCATE TABLE basic_schedules CASCADE"))
+        db.session.execute(db.text("TRUNCATE TABLE associations CASCADE"))
 
-            # Truncate legacy tables
-            db.session.execute(db.text("TRUNCATE TABLE schedule_locations CASCADE"))
-            db.session.execute(db.text("TRUNCATE TABLE basic_schedules CASCADE"))
-            db.session.execute(db.text("TRUNCATE TABLE associations CASCADE"))
+        # Truncate STP-specific location tables
+        db.session.execute(db.text("TRUNCATE TABLE schedule_locations_ltp CASCADE"))
+        db.session.execute(db.text("TRUNCATE TABLE schedule_locations_stp_new CASCADE"))
+        db.session.execute(db.text("TRUNCATE TABLE schedule_locations_stp_overlay CASCADE"))
+        db.session.execute(db.text("TRUNCATE TABLE schedule_locations_stp_cancellation CASCADE"))
 
-            # Truncate STP-specific location tables
-            db.session.execute(db.text("TRUNCATE TABLE schedule_locations_ltp CASCADE"))
-            db.session.execute(db.text("TRUNCATE TABLE schedule_locations_stp_new CASCADE"))
-            db.session.execute(db.text("TRUNCATE TABLE schedule_locations_stp_overlay CASCADE"))
-            db.session.execute(db.text("TRUNCATE TABLE schedule_locations_stp_cancellation CASCADE"))
+        # Truncate STP-specific schedule tables
+        db.session.execute(db.text("TRUNCATE TABLE schedules_ltp CASCADE"))
+        db.session.execute(db.text("TRUNCATE TABLE schedules_stp_new CASCADE"))
+        db.session.execute(db.text("TRUNCATE TABLE schedules_stp_overlay CASCADE"))
+        db.session.execute(db.text("TRUNCATE TABLE schedules_stp_cancellation CASCADE"))
 
-            # Truncate STP-specific schedule tables
-            db.session.execute(db.text("TRUNCATE TABLE schedules_ltp CASCADE"))
-            db.session.execute(db.text("TRUNCATE TABLE schedules_stp_new CASCADE"))
-            db.session.execute(db.text("TRUNCATE TABLE schedules_stp_overlay CASCADE"))
-            db.session.execute(db.text("TRUNCATE TABLE schedules_stp_cancellation CASCADE"))
+        # Truncate STP-specific association tables
+        db.session.execute(db.text("TRUNCATE TABLE associations_ltp CASCADE"))
+        db.session.execute(db.text("TRUNCATE TABLE associations_stp_new CASCADE"))
+        db.session.execute(db.text("TRUNCATE TABLE associations_stp_overlay CASCADE"))
+        db.session.execute(db.text("TRUNCATE TABLE associations_stp_cancellation CASCADE"))
 
-            # Truncate STP-specific association tables
-            db.session.execute(db.text("TRUNCATE TABLE associations_ltp CASCADE"))
-            db.session.execute(db.text("TRUNCATE TABLE associations_stp_new CASCADE"))
-            db.session.execute(db.text("TRUNCATE TABLE associations_stp_overlay CASCADE"))
-            db.session.execute(db.text("TRUNCATE TABLE associations_stp_cancellation CASCADE"))
+        # Keep track of processed files
+        db.session.execute(db.text("TRUNCATE TABLE parsed_files CASCADE"))
 
-            # Keep track of processed files
-            db.session.execute(db.text("TRUNCATE TABLE parsed_files CASCADE"))
-
-            db.session.commit()
-            logger.info("All database tables truncated successfully for full extract")
-
-            # Process the file data
-            self.load_file_data(file_path)
-        except Exception as e:
-            db.session.rollback()
-            logger.exception(f"Error in process_full_extract: {str(e)}")
+        logger.info("All database tables truncated successfully for full extract")
 
     def process_update_extract(self, file_path: str, file_ref: str):
         """
@@ -330,8 +331,7 @@ class CIFParser:
         """
         logger.info(f"Processing update extract file: {file_path}")
 
-        # Process the file data with transaction type handling
-        self.load_file_data(file_path)
+        # Actual data load occurs in the surrounding transaction scope
 
     def parse_cif_date(self, date_str: str) -> Optional[dt.date]:
         """
@@ -641,29 +641,13 @@ class CIFParser:
 
         # List of schedules to return with IDs
         schedules_with_ids = []
-
-        # Group schedules by STP indicator
-        p_schedules = []
-        n_schedules = []
-        o_schedules = []
-        c_schedules = []
+        schedule_entries = []
 
         for schedule_data in buffer:
             # Skip if already has ID
             if 'id' in schedule_data:
                 schedules_with_ids.append(schedule_data)
                 continue
-
-            # Group by STP indicator
-            stp_indicator = schedule_data['stp_indicator']
-            if stp_indicator == 'P':
-                p_schedules.append(schedule_data)
-            elif stp_indicator == 'N':
-                n_schedules.append(schedule_data)
-            elif stp_indicator == 'O':
-                o_schedules.append(schedule_data)
-            elif stp_indicator == 'C':
-                c_schedules.append(schedule_data)
 
             # Add to legacy table for backward compatibility
             schedule = BasicSchedule()
@@ -684,152 +668,57 @@ class CIFParser:
                 schedule.created_at = schedule_data['created_at']
             db.session.add(schedule)
 
-        # Insert schedules into STP-specific tables
-        # P: Long-Term Plan
-        for schedule_data in p_schedules:
-            schedule_ltp = ScheduleLTP()
-            schedule_ltp.uid = schedule_data['uid']
-            schedule_ltp.stp_indicator = schedule_data['stp_indicator']
-            schedule_ltp.transaction_type = schedule_data['transaction_type']
-            schedule_ltp.runs_from = schedule_data['runs_from']
-            schedule_ltp.runs_to = schedule_data['runs_to']
-            schedule_ltp.days_run = schedule_data['days_run']
-            schedule_ltp.train_status = schedule_data['train_status']
-            schedule_ltp.train_category = schedule_data['train_category']
-            schedule_ltp.train_identity = schedule_data['train_identity']
-            schedule_ltp.service_code = schedule_data['service_code']
-            schedule_ltp.power_type = schedule_data['power_type']
-            schedule_ltp.speed = schedule_data['speed']
-            schedule_ltp.operating_chars = schedule_data['operating_chars']
-            if 'created_at' in schedule_data:
-                schedule_ltp.created_at = schedule_data['created_at']
-            db.session.add(schedule_ltp)
+            stp_schedule = None
+            stp_table = None
+            stp_indicator = schedule_data['stp_indicator']
 
-        # N: New STP
-        for schedule_data in n_schedules:
-            schedule_stp_new = ScheduleSTPNew()
-            schedule_stp_new.uid = schedule_data['uid']
-            schedule_stp_new.stp_indicator = schedule_data['stp_indicator']
-            schedule_stp_new.transaction_type = schedule_data['transaction_type']
-            schedule_stp_new.runs_from = schedule_data['runs_from']
-            schedule_stp_new.runs_to = schedule_data['runs_to']
-            schedule_stp_new.days_run = schedule_data['days_run']
-            schedule_stp_new.train_status = schedule_data['train_status']
-            schedule_stp_new.train_category = schedule_data['train_category']
-            schedule_stp_new.train_identity = schedule_data['train_identity']
-            schedule_stp_new.service_code = schedule_data['service_code']
-            schedule_stp_new.power_type = schedule_data['power_type']
-            schedule_stp_new.speed = schedule_data['speed']
-            schedule_stp_new.operating_chars = schedule_data['operating_chars']
-            if 'created_at' in schedule_data:
-                schedule_stp_new.created_at = schedule_data['created_at']
-            db.session.add(schedule_stp_new)
+            if stp_indicator == 'P':
+                stp_schedule = ScheduleLTP()
+                stp_table = 'schedules_ltp'
+            elif stp_indicator == 'N':
+                stp_schedule = ScheduleSTPNew()
+                stp_table = 'schedules_stp_new'
+            elif stp_indicator == 'O':
+                stp_schedule = ScheduleSTPOverlay()
+                stp_table = 'schedules_stp_overlay'
+            elif stp_indicator == 'C':
+                stp_schedule = ScheduleSTPCancellation()
+                stp_table = 'schedules_stp_cancellation'
 
-        # O: Overlay STP
-        for schedule_data in o_schedules:
-            schedule_stp_overlay = ScheduleSTPOverlay()
-            schedule_stp_overlay.uid = schedule_data['uid']
-            schedule_stp_overlay.stp_indicator = schedule_data['stp_indicator']
-            schedule_stp_overlay.transaction_type = schedule_data['transaction_type']
-            schedule_stp_overlay.runs_from = schedule_data['runs_from']
-            schedule_stp_overlay.runs_to = schedule_data['runs_to']
-            schedule_stp_overlay.days_run = schedule_data['days_run']
-            schedule_stp_overlay.train_status = schedule_data['train_status']
-            schedule_stp_overlay.train_category = schedule_data['train_category']
-            schedule_stp_overlay.train_identity = schedule_data['train_identity']
-            schedule_stp_overlay.service_code = schedule_data['service_code']
-            schedule_stp_overlay.power_type = schedule_data['power_type']
-            schedule_stp_overlay.speed = schedule_data['speed']
-            schedule_stp_overlay.operating_chars = schedule_data['operating_chars']
-            if 'created_at' in schedule_data:
-                schedule_stp_overlay.created_at = schedule_data['created_at']
-            db.session.add(schedule_stp_overlay)
+            if stp_schedule is not None:
+                stp_schedule.uid = schedule_data['uid']
+                stp_schedule.stp_indicator = schedule_data['stp_indicator']
+                stp_schedule.transaction_type = schedule_data['transaction_type']
+                stp_schedule.runs_from = schedule_data['runs_from']
+                stp_schedule.runs_to = schedule_data['runs_to']
+                stp_schedule.days_run = schedule_data['days_run']
+                stp_schedule.train_status = schedule_data['train_status']
+                stp_schedule.train_category = schedule_data['train_category']
+                stp_schedule.train_identity = schedule_data['train_identity']
+                stp_schedule.service_code = schedule_data['service_code']
+                stp_schedule.power_type = schedule_data['power_type']
+                stp_schedule.speed = schedule_data['speed']
+                stp_schedule.operating_chars = schedule_data['operating_chars']
+                if 'created_at' in schedule_data:
+                    stp_schedule.created_at = schedule_data['created_at']
+                db.session.add(stp_schedule)
 
-        # C: Cancellation STP
-        for schedule_data in c_schedules:
-            schedule_stp_cancellation = ScheduleSTPCancellation()
-            schedule_stp_cancellation.uid = schedule_data['uid']
-            schedule_stp_cancellation.stp_indicator = schedule_data['stp_indicator']
-            schedule_stp_cancellation.transaction_type = schedule_data['transaction_type']
-            schedule_stp_cancellation.runs_from = schedule_data['runs_from']
-            schedule_stp_cancellation.runs_to = schedule_data['runs_to']
-            schedule_stp_cancellation.days_run = schedule_data['days_run']
-            schedule_stp_cancellation.train_status = schedule_data['train_status']
-            schedule_stp_cancellation.train_category = schedule_data['train_category']
-            schedule_stp_cancellation.train_identity = schedule_data['train_identity']
-            schedule_stp_cancellation.service_code = schedule_data['service_code']
-            schedule_stp_cancellation.power_type = schedule_data['power_type']
-            schedule_stp_cancellation.speed = schedule_data['speed']
-            schedule_stp_cancellation.operating_chars = schedule_data['operating_chars']
-            if 'created_at' in schedule_data:
-                schedule_stp_cancellation.created_at = schedule_data['created_at']
-            db.session.add(schedule_stp_cancellation)
+            schedule_entries.append((schedule_data, schedule, stp_schedule, stp_table))
 
-        db.session.commit()
+        if schedule_entries:
+            db.session.flush()
 
-        # Update schedule data with IDs
-        for i, schedule_data in enumerate(buffer):
-            if 'id' not in schedule_data:
-                # Find the corresponding BasicSchedule by UID and other unique fields
-                schedule = db.session.query(BasicSchedule).filter_by(
-                    uid=schedule_data['uid'],
-                    stp_indicator=schedule_data['stp_indicator'],
-                    runs_from=schedule_data['runs_from'],
-                    runs_to=schedule_data['runs_to']
-                ).first()
+            for schedule_data, schedule, stp_schedule, stp_table in schedule_entries:
+                schedule_data['id'] = schedule.id
+                schedule_data['legacy_table'] = 'basic_schedules'
+                schedule_data['schedule_id'] = schedule.id  # Add this for legacy compatibility
 
-                if schedule:
-                    # Store the legacy schedule ID
-                    schedule_data['id'] = schedule.id
-                    schedule_data['legacy_table'] = 'basic_schedules'
-                    schedule_data['schedule_id'] = schedule.id  # Add this for legacy compatibility
+                if stp_schedule is not None:
+                    schedule_data['stp_id'] = stp_schedule.id
+                    schedule_data['stp_table'] = stp_table
 
-                    # Add STP-specific IDs
-                    stp_indicator = schedule_data['stp_indicator']
-                    if stp_indicator == 'P':
-                        # Store the LTP schedule ID
-                        stp_schedule = db.session.query(ScheduleLTP).filter_by(
-                            uid=schedule_data['uid'],
-                            runs_from=schedule_data['runs_from'],
-                            runs_to=schedule_data['runs_to']
-                        ).first()
-                        if stp_schedule:
-                            schedule_data['stp_id'] = stp_schedule.id
-                            schedule_data['stp_table'] = 'schedules_ltp'
-                    elif stp_indicator == 'N':
-                        # Store the New STP schedule ID
-                        stp_schedule = db.session.query(ScheduleSTPNew).filter_by(
-                            uid=schedule_data['uid'],
-                            runs_from=schedule_data['runs_from'],
-                            runs_to=schedule_data['runs_to']
-                        ).first()
-                        if stp_schedule:
-                            schedule_data['stp_id'] = stp_schedule.id
-                            schedule_data['stp_table'] = 'schedules_stp_new'
-                    elif stp_indicator == 'O':
-                        # Store the Overlay STP schedule ID
-                        stp_schedule = db.session.query(ScheduleSTPOverlay).filter_by(
-                            uid=schedule_data['uid'],
-                            runs_from=schedule_data['runs_from'],
-                            runs_to=schedule_data['runs_to']
-                        ).first()
-                        if stp_schedule:
-                            schedule_data['stp_id'] = stp_schedule.id
-                            schedule_data['stp_table'] = 'schedules_stp_overlay'
-                    elif stp_indicator == 'C':
-                        # Store the Cancellation STP schedule ID
-                        stp_schedule = db.session.query(ScheduleSTPCancellation).filter_by(
-                            uid=schedule_data['uid'],
-                            runs_from=schedule_data['runs_from'],
-                            runs_to=schedule_data['runs_to']
-                        ).first()
-                        if stp_schedule:
-                            schedule_data['stp_id'] = stp_schedule.id
-                            schedule_data['stp_table'] = 'schedules_stp_cancellation'
+                schedules_with_ids.append(schedule_data)
 
-                    schedules_with_ids.append(schedule_data)
-
-        #logger.info(f"Committed {len(buffer)} schedules to database (by STP indicator: P={len(p_schedules)}, N={len(n_schedules)}, O={len(o_schedules)}, C={len(c_schedules)})")
         return schedules_with_ids
 
     def flush_sl_buffer(self, buffer: List[Dict]):
@@ -842,142 +731,63 @@ class CIFParser:
         if not buffer:
             return
 
-        # Group locations by STP indicator (via their parent schedule)
-        p_locations = []
-        n_locations = []
-        o_locations = []
-        c_locations = []
+        legacy_mappings = []
+        stp_mapping_lists = {
+            'schedules_ltp': (ScheduleLocationLTP, []),
+            'schedules_stp_new': (ScheduleLocationSTPNew, []),
+            'schedules_stp_overlay': (ScheduleLocationSTPOverlay, []),
+            'schedules_stp_cancellation': (ScheduleLocationSTPCancellation, []),
+        }
 
         for location_data in buffer:
-            # Special debug logging to understand what's happening
-            if 'stp_id' in location_data and 'stp_table' in location_data:
-                logger.debug(f"Found location with STP data: table={location_data['stp_table']}, id={location_data['stp_id']}")
+            legacy_mappings.append({
+                'schedule_id': location_data['schedule_id'],
+                'sequence': location_data['sequence'],
+                'location_type': location_data['location_type'],
+                'tiploc': location_data['tiploc'],
+                'arr': location_data['arr'],
+                'dep': location_data['dep'],
+                'pass_time': location_data['pass_time'],
+                'public_arr': location_data['public_arr'],
+                'public_dep': location_data['public_dep'],
+                'platform': location_data['platform'],
+                'line': location_data['line'],
+                'path': location_data['path'],
+                'activity': location_data['activity'],
+                'engineering_allowance': location_data.get('engineering_allowance'),
+                'pathing_allowance': location_data.get('pathing_allowance'),
+                'performance_allowance': location_data.get('performance_allowance'),
+            })
 
-                # Group by STP table
-                if location_data['stp_table'] == 'schedules_ltp':
-                    p_locations.append(location_data)
-                elif location_data['stp_table'] == 'schedules_stp_new':
-                    n_locations.append(location_data)
-                elif location_data['stp_table'] == 'schedules_stp_overlay':
-                    o_locations.append(location_data)
-                elif location_data['stp_table'] == 'schedules_stp_cancellation':
-                    c_locations.append(location_data)
+            stp_id = location_data.get('stp_id')
+            stp_table = location_data.get('stp_table')
+            if stp_id and stp_table in stp_mapping_lists:
+                model, mappings = stp_mapping_lists[stp_table]
+                mappings.append({
+                    'schedule_id': stp_id,
+                    'sequence': location_data['sequence'],
+                    'location_type': location_data['location_type'],
+                    'tiploc': location_data['tiploc'],
+                    'arr': location_data['arr'],
+                    'dep': location_data['dep'],
+                    'pass_time': location_data['pass_time'],
+                    'public_arr': location_data['public_arr'],
+                    'public_dep': location_data['public_dep'],
+                    'platform': location_data['platform'],
+                    'line': location_data['line'],
+                    'path': location_data['path'],
+                    'activity': location_data['activity'],
+                    'engineering_allowance': location_data.get('engineering_allowance'),
+                    'pathing_allowance': location_data.get('pathing_allowance'),
+                    'performance_allowance': location_data.get('performance_allowance'),
+                })
 
-            # Always insert into legacy table for backward compatibility
-            location = ScheduleLocation()
-            location.schedule_id = location_data['schedule_id']
-            location.sequence = location_data['sequence']
-            location.location_type = location_data['location_type'] 
-            location.tiploc = location_data['tiploc']
-            location.arr = location_data['arr']
-            location.dep = location_data['dep']
-            location.pass_time = location_data['pass_time']
-            location.public_arr = location_data['public_arr']
-            location.public_dep = location_data['public_dep']
-            location.platform = location_data['platform']
-            location.line = location_data['line']
-            location.path = location_data['path']
-            location.activity = location_data['activity']
-            location.engineering_allowance = location_data.get('engineering_allowance')
-            location.pathing_allowance = location_data.get('pathing_allowance')
-            location.performance_allowance = location_data.get('performance_allowance')
-            db.session.add(location)
+        if legacy_mappings:
+            db.session.bulk_insert_mappings(ScheduleLocation, legacy_mappings)
 
-        # Insert into STP-specific location tables
-
-        # P: Long-Term Plan locations
-        for location_data in p_locations:
-            if 'stp_id' in location_data:
-                location = ScheduleLocationLTP()
-                location.schedule_id = location_data['stp_id']
-                location.sequence = location_data['sequence']
-                location.location_type = location_data['location_type'] 
-                location.tiploc = location_data['tiploc']
-                location.arr = location_data['arr']
-                location.dep = location_data['dep']
-                location.pass_time = location_data['pass_time']
-                location.public_arr = location_data['public_arr']
-                location.public_dep = location_data['public_dep']
-                location.platform = location_data['platform']
-                location.line = location_data['line']
-                location.path = location_data['path']
-                location.activity = location_data['activity']
-                location.engineering_allowance = location_data.get('engineering_allowance')
-                location.pathing_allowance = location_data.get('pathing_allowance')
-                location.performance_allowance = location_data.get('performance_allowance')
-                db.session.add(location)
-
-                # Log for debugging
-                logger.debug(f"Added location {location.tiploc} to ScheduleLocationLTP for schedule_id {location.schedule_id}")
-
-        # N: New STP locations
-        for location_data in n_locations:
-            if 'stp_id' in location_data:
-                location = ScheduleLocationSTPNew()
-                location.schedule_id = location_data['stp_id']
-                location.sequence = location_data['sequence']
-                location.location_type = location_data['location_type'] 
-                location.tiploc = location_data['tiploc']
-                location.arr = location_data['arr']
-                location.dep = location_data['dep']
-                location.pass_time = location_data['pass_time']
-                location.public_arr = location_data['public_arr']
-                location.public_dep = location_data['public_dep']
-                location.platform = location_data['platform']
-                location.line = location_data['line']
-                location.path = location_data['path']
-                location.activity = location_data['activity']
-                location.engineering_allowance = location_data.get('engineering_allowance')
-                location.pathing_allowance = location_data.get('pathing_allowance')
-                location.performance_allowance = location_data.get('performance_allowance')
-                db.session.add(location)
-
-        # O: Overlay STP locations
-        for location_data in o_locations:
-            if 'stp_id' in location_data:
-                location = ScheduleLocationSTPOverlay()
-                location.schedule_id = location_data['stp_id']
-                location.sequence = location_data['sequence']
-                location.location_type = location_data['location_type'] 
-                location.tiploc = location_data['tiploc']
-                location.arr = location_data['arr']
-                location.dep = location_data['dep']
-                location.pass_time = location_data['pass_time']
-                location.public_arr = location_data['public_arr']
-                location.public_dep = location_data['public_dep']
-                location.platform = location_data['platform']
-                location.line = location_data['line']
-                location.path = location_data['path']
-                location.activity = location_data['activity']
-                location.engineering_allowance = location_data.get('engineering_allowance')
-                location.pathing_allowance = location_data.get('pathing_allowance')
-                location.performance_allowance = location_data.get('performance_allowance')
-                db.session.add(location)
-
-        # C: Cancellation STP locations
-        for location_data in c_locations:
-            if 'stp_id' in location_data:
-                location = ScheduleLocationSTPCancellation()
-                location.schedule_id = location_data['stp_id']
-                location.sequence = location_data['sequence']
-                location.location_type = location_data['location_type'] 
-                location.tiploc = location_data['tiploc']
-                location.arr = location_data['arr']
-                location.dep = location_data['dep']
-                location.pass_time = location_data['pass_time']
-                location.public_arr = location_data['public_arr']
-                location.public_dep = location_data['public_dep']
-                location.platform = location_data['platform']
-                location.line = location_data['line']
-                location.path = location_data['path']
-                location.activity = location_data['activity']
-                location.engineering_allowance = location_data.get('engineering_allowance')
-                location.pathing_allowance = location_data.get('pathing_allowance')
-                location.performance_allowance = location_data.get('performance_allowance')
-                db.session.add(location)
-
-        db.session.commit()
-        #logger.info(f"Committed {len(buffer)} schedule locations to database (by STP: P={len(p_locations)}, N={len(n_locations)}, O={len(o_locations)}, C={len(c_locations)})")
+        for model, mappings in stp_mapping_lists.values():
+            if mappings:
+                db.session.bulk_insert_mappings(model, mappings)
 
     def flush_aa_buffer(self, buffer: List[Dict]):
         """
@@ -988,122 +798,58 @@ class CIFParser:
         """
         if not buffer:
             return
-        # Group associations by STP indicator
-        p_associations = []
-        n_associations = []
-        o_associations = []
-        c_associations = []
+
+        legacy_mappings = []
+        stp_mapping_lists = {
+            'P': (AssociationLTP, []),
+            'N': (AssociationSTPNew, []),
+            'O': (AssociationSTPOverlay, []),
+            'C': (AssociationSTPCancellation, []),
+        }
 
         for assoc_data in buffer:
-            # Group by STP indicator
-            stp_indicator = assoc_data['stp_indicator']
-            if stp_indicator == 'P':
-                p_associations.append(assoc_data)
-            elif stp_indicator == 'N':
-                n_associations.append(assoc_data)
-            elif stp_indicator == 'O':
-                o_associations.append(assoc_data)
-            elif stp_indicator == 'C':
-                c_associations.append(assoc_data)
+            legacy_mappings.append({
+                'main_uid': assoc_data['main_uid'],
+                'assoc_uid': assoc_data['assoc_uid'],
+                'category': assoc_data['category'],
+                'date_from': assoc_data['date_from'],
+                'date_to': assoc_data['date_to'],
+                'days_run': assoc_data['days_run'],
+                'location': assoc_data['location'],
+                'base_suffix': assoc_data['base_suffix'],
+                'assoc_suffix': assoc_data['assoc_suffix'],
+                'date_indicator': assoc_data['date_indicator'],
+                'stp_indicator': assoc_data['stp_indicator'],
+                'transaction_type': assoc_data['transaction_type'],
+                'created_at': assoc_data.get('created_at'),
+            })
 
-            # Always insert into legacy table for backward compatibility
-            association = Association()
-            association.main_uid = assoc_data['main_uid']
-            association.assoc_uid = assoc_data['assoc_uid']
-            association.category = assoc_data['category']
-            association.date_from = assoc_data['date_from']
-            association.date_to = assoc_data['date_to']
-            association.days_run = assoc_data['days_run']
-            association.location = assoc_data['location']
-            association.base_suffix = assoc_data['base_suffix']
-            association.assoc_suffix = assoc_data['assoc_suffix']
-            association.date_indicator = assoc_data['date_indicator']
-            association.stp_indicator = assoc_data['stp_indicator']
-            association.transaction_type = assoc_data['transaction_type']
-            if 'created_at' in assoc_data:
-                association.created_at = assoc_data['created_at']
-            db.session.add(association)
+            stp_indicator = assoc_data.get('stp_indicator')
+            mapping = stp_mapping_lists.get(stp_indicator)
+            if mapping:
+                model, mappings = mapping
+                mappings.append({
+                    'main_uid': assoc_data['main_uid'],
+                    'assoc_uid': assoc_data['assoc_uid'],
+                    'category': assoc_data['category'],
+                    'date_from': assoc_data['date_from'],
+                    'date_to': assoc_data['date_to'],
+                    'days_run': assoc_data['days_run'],
+                    'location': assoc_data['location'],
+                    'base_suffix': assoc_data['base_suffix'],
+                    'assoc_suffix': assoc_data['assoc_suffix'],
+                    'date_indicator': assoc_data['date_indicator'],
+                    'stp_indicator': assoc_data['stp_indicator'],
+                    'transaction_type': assoc_data['transaction_type'],
+                    'created_at': assoc_data.get('created_at'),
+                })
 
-        # Insert into STP-specific tables
+        if legacy_mappings:
+            db.session.bulk_insert_mappings(Association, legacy_mappings)
 
-        # P: Long-Term Plan associations
-        for assoc_data in p_associations:
-            association = AssociationLTP()
-            association.main_uid = assoc_data['main_uid']
-            association.assoc_uid = assoc_data['assoc_uid']
-            association.category = assoc_data['category']
-            association.date_from = assoc_data['date_from']
-            association.date_to = assoc_data['date_to']
-            association.days_run = assoc_data['days_run']
-            association.location = assoc_data['location']
-            association.base_suffix = assoc_data['base_suffix']
-            association.assoc_suffix = assoc_data['assoc_suffix']
-            association.date_indicator = assoc_data['date_indicator']
-            association.stp_indicator = assoc_data['stp_indicator']
-            association.transaction_type = assoc_data['transaction_type']
-            if 'created_at' in assoc_data:
-                association.created_at = assoc_data['created_at']
-            db.session.add(association)
-
-        # N: New STP associations
-        for assoc_data in n_associations:
-            association = AssociationSTPNew()
-            association.main_uid = assoc_data['main_uid']
-            association.assoc_uid = assoc_data['assoc_uid']
-            association.category = assoc_data['category']
-            association.date_from = assoc_data['date_from']
-            association.date_to = assoc_data['date_to']
-            association.days_run = assoc_data['days_run']
-            association.location = assoc_data['location']
-            association.base_suffix = assoc_data['base_suffix']
-            association.assoc_suffix = assoc_data['assoc_suffix']
-            association.date_indicator = assoc_data['date_indicator']
-            association.stp_indicator = assoc_data['stp_indicator']
-            association.transaction_type = assoc_data['transaction_type']
-            if 'created_at' in assoc_data:
-                association.created_at = assoc_data['created_at']
-            db.session.add(association)
-
-        # O: Overlay STP associations
-        for assoc_data in o_associations:
-            association = AssociationSTPOverlay()
-            association.main_uid = assoc_data['main_uid']
-            association.assoc_uid = assoc_data['assoc_uid']
-            association.category = assoc_data['category']
-            association.date_from = assoc_data['date_from']
-            association.date_to = assoc_data['date_to']
-            association.days_run = assoc_data['days_run']
-            association.location = assoc_data['location']
-            association.base_suffix = assoc_data['base_suffix']
-            association.assoc_suffix = assoc_data['assoc_suffix']
-            association.date_indicator = assoc_data['date_indicator']
-            association.stp_indicator = assoc_data['stp_indicator']
-            association.transaction_type = assoc_data['transaction_type']
-            if 'created_at' in assoc_data:
-                association.created_at = assoc_data['created_at']
-            db.session.add(association)
-
-        # C: Cancellation STP associations
-        for assoc_data in c_associations:
-            association = AssociationSTPCancellation()
-            association.main_uid = assoc_data['main_uid']
-            association.assoc_uid = assoc_data['assoc_uid']
-            association.category = assoc_data['category']
-            association.date_from = assoc_data['date_from']
-            association.date_to = assoc_data['date_to']
-            association.days_run = assoc_data['days_run']
-            association.location = assoc_data['location']
-            association.base_suffix = assoc_data['base_suffix']
-            association.assoc_suffix = assoc_data['assoc_suffix']
-            association.date_indicator = assoc_data['date_indicator']
-            association.stp_indicator = assoc_data['stp_indicator']
-            association.transaction_type = assoc_data['transaction_type']
-            if 'created_at' in assoc_data:
-                association.created_at = assoc_data['created_at']
-            db.session.add(association)
-
-        db.session.commit()
-        #logger.info(f"Committed {len(buffer)} associations to database (by STP: P={len(p_associations)}, N={len(n_associations)}, O={len(o_associations)}, C={len(c_associations)})")
+        for model, mappings in stp_mapping_lists.values():
+            if mappings:
+                db.session.bulk_insert_mappings(model, mappings)
 
 def process_cif_files():
     """Function to process CIF files in the import folder."""
