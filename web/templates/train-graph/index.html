@@ -1,0 +1,122 @@
+{% extends 'base.html' %}
+
+{% block title %}Train Graph Viewer{% endblock %}
+
+{% block styles %}
+<link href="{{ url_for('web.static', filename='css/train-graph/style.css') }}" rel="stylesheet">
+{% endblock %}
+
+{% block content %}
+<div class="mb-4">
+    <a href="{{ url_for('web.index') }}" class="btn btn-secondary">← Back to Home</a>
+</div>
+
+<div class="card mb-4">
+    <div class="card-header">
+        <h2 class="h4 mb-0">Train Graph Configuration</h2>
+    </div>
+    <div class="card-body">
+        <div class="row">
+            <div class="col-md-4">
+                <div class="form-group mb-3">
+                    <label for="date-picker">Date</label>
+                    <input type="date" id="date-picker" class="form-control" value="{{ today_date }}">
+                </div>
+            </div>
+            <div class="col-md-8">
+                <div class="form-group mb-3">
+                    <label for="config-select">Configuration</label>
+                    <select id="config-select" class="form-control">
+                        <option value="">Loading configurations...</option>
+                    </select>
+                </div>
+            </div>
+        </div>
+        <div class="row mt-2">
+            <div class="col-12">
+                <div class="form-group">
+                    <label>Display Options</label>
+                    <div class="d-flex flex-wrap mt-2">
+                        <div class="form-check me-3">
+                            <input class="form-check-input" type="checkbox" id="show-passenger" checked>
+                            <label class="form-check-label" for="show-passenger">Passenger</label>
+                        </div>
+                        <div class="form-check me-3">
+                            <input class="form-check-input" type="checkbox" id="show-freight" checked>
+                            <label class="form-check-label" for="show-freight">Freight</label>
+                        </div>
+                        <div class="form-check me-3">
+                            <input class="form-check-input" type="checkbox" id="show-ecs" checked>
+                            <label class="form-check-label" for="show-ecs">ECS</label>
+                        </div>
+                        <div class="form-check me-3">
+                            <input class="form-check-input" type="checkbox" id="show-platforms" checked>
+                            <label class="form-check-label" for="show-platforms">Platforms</label>
+                        </div>
+                        <div class="form-check me-3">
+                            <input class="form-check-input" type="checkbox" id="show-associations" checked>
+                            <label class="form-check-label" for="show-associations">Associations</label>
+                        </div>
+                        <div class="form-check me-3">
+                            <input class="form-check-input" type="checkbox" id="enable-filters" checked>
+                            <label class="form-check-label" for="enable-filters">Apply Filters</label>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="row mt-3">
+            <div class="col-12">
+                <button id="refresh-graph" class="btn btn-primary">Generate Graph</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-header d-flex justify-content-between align-items-center">
+        <h2 class="h4 mb-0">Train Graph</h2>
+        <div>
+            <button id="zoom-in" class="btn btn-sm btn-outline-secondary" title="Zoom In">
+                <i class="bi bi-zoom-in"></i>
+            </button>
+            <button id="zoom-out" class="btn btn-sm btn-outline-secondary" title="Zoom Out">
+                <i class="bi bi-zoom-out"></i>
+            </button>
+            <button id="reset-view" class="btn btn-sm btn-outline-secondary" title="Reset View">
+                <i class="bi bi-arrow-counterclockwise"></i>
+            </button>
+            <button id="export-svg" class="btn btn-sm btn-outline-secondary" title="Export as SVG">
+                <i class="bi bi-download"></i> SVG
+            </button>
+        </div>
+    </div>
+    <div class="card-body p-0">
+        <div id="train-graph-container">
+            <div id="train-graph-loading" class="text-center py-5">
+                <div class="spinner-border text-primary" role="status">
+                    <span class="visually-hidden">Loading...</span>
+                </div>
+                <p class="mt-2">Loading train graph...</p>
+            </div>
+            <div id="train-graph"></div>
+        </div>
+    </div>
+</div>
+
+<div id="train-tooltip" class="tooltip-container">
+    <div class="tooltip-content">
+        <h5 class="tooltip-title"></h5>
+        <div class="tooltip-body"></div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="https://d3js.org/d3.v7.min.js"></script>
+<script src="{{ url_for('web.static', filename='js/train-graph/config.js') }}"></script>
+<script src="{{ url_for('web.static', filename='js/train-graph/mappers.js') }}"></script>
+<script src="{{ url_for('web.static', filename='js/train-graph/filters.js') }}"></script>
+<script src="{{ url_for('web.static', filename='js/train-graph/renderer.js') }}"></script>
+<script src="{{ url_for('web.static', filename='js/train-graph/main.js') }}"></script>
+{% endblock %}

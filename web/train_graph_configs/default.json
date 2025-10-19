@@ -1,0 +1,20 @@
+{
+  "name": "London Bridge to Charing Cross",
+  "locations": ["CHRX", "WLOE", "LNDNBDE", "BLUANCR"],
+  "direction": "down",
+  "display_names": {
+    "CHRX": "Charing Cross",
+    "WLOE": "Waterloo East",
+    "LNDNBDE": "London Bridge",
+    "BLUANCR": "Blue Anchor"
+  },
+  "filters": [
+    {
+      "location": "LNDNBDE",
+      "platform": "5",
+      "line": "FL",
+      "path": "DS"
+    }
+  ],
+  "filter_mode": "match_any"
+}

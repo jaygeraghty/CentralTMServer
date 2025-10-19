@@ -1,0 +1,194 @@
+/* Train Graph Viewer Styles */
+
+#train-graph-container {
+    position: relative;
+    width: 100%;
+    height: 600px;
+    background-color: #272b30;
+    border-radius: 0.25rem;
+    overflow: hidden;
+}
+
+#train-graph {
+    width: 100%;
+    height: 100%;
+}
+
+#train-graph svg {
+    width: 100%;
+    height: 100%;
+}
+
+/* Axis Styling */
+.axis path,
+.axis line {
+    stroke: #495057;
+    shape-rendering: crispEdges;
+}
+
+.axis text {
+    fill: #adb5bd;
+    font-size: 10px;
+}
+
+.grid line {
+    stroke: #495057;
+    stroke-opacity: 0.2;
+    shape-rendering: crispEdges;
+}
+
+.grid path {
+    stroke-width: 0;
+}
+
+/* Train Line Styling */
+.train-line {
+    stroke-width: 2;
+    fill: none;
+    transition: stroke-width 0.2s;
+}
+
+.train-line.passenger {
+    stroke: #0d6efd;
+}
+
+.train-line.freight {
+    stroke: #fd7e14;
+}
+
+.train-line.ecs {
+    stroke: #6c757d;
+    stroke-dasharray: 4, 2;
+}
+
+.train-line.cancelled {
+    stroke: #dc3545;
+    stroke-dasharray: 3, 3;
+}
+
+.train-line:hover {
+    stroke-width: 3;
+    cursor: pointer;
+}
+
+.train-line.selected {
+    stroke-width: 4;
+    stroke: #ffc107;
+}
+
+/* Train Station Markers */
+.station-mark {
+    stroke: #dee2e6;
+    stroke-width: 1;
+    fill: #495057;
+}
+
+/* Association Lines */
+.association-line {
+    stroke: #20c997;
+    stroke-width: 1.5;
+    stroke-dasharray: 3, 3;
+    fill: none;
+}
+
+/* Tooltip Styling */
+.tooltip-container {
+    position: absolute;
+    display: none;
+    pointer-events: none;
+    background-color: rgba(33, 37, 41, 0.95);
+    color: #fff;
+    font-size: 14px;
+    padding: 10px;
+    border-radius: 4px;
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
+    z-index: 1000;
+    max-width: 300px;
+    border: 1px solid #495057;
+}
+
+.tooltip-title {
+    font-size: 16px;
+    font-weight: bold;
+    margin-bottom: 5px;
+    border-bottom: 1px solid #495057;
+    padding-bottom: 5px;
+}
+
+.tooltip-body {
+    font-size: 13px;
+}
+
+.tooltip-body table {
+    width: 100%;
+    margin-bottom: 0;
+}
+
+.tooltip-body td {
+    padding: 2px 5px;
+}
+
+.tooltip-body td:first-child {
+    font-weight: bold;
+    color: #adb5bd;
+    text-align: right;
+}
+
+/* Loading Indicator */
+#train-graph-loading {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(33, 37, 41, 0.8);
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    z-index: 100;
+}
+
+/* Location Label Styling */
+.location-label {
+    font-size: 12px;
+    fill: #adb5bd;
+    font-weight: bold;
+}
+
+/* Time Label Styling */
+.time-label {
+    font-size: 10px;
+    fill: #6c757d;
+}
+
+/* Major time ticks */
+.time-tick.major {
+    stroke: #495057;
+    stroke-width: 1;
+}
+
+/* Minor time ticks */
+.time-tick.minor {
+    stroke: #495057;
+    stroke-width: 0.5;
+    stroke-opacity: 0.5;
+}
+
+/* Platform labels */
+.platform-label {
+    font-size: 10px;
+    fill: #6c757d;
+}
+
+/* Button group styling */
+.graph-controls {
+    margin-bottom: 15px;
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+    #train-graph-container {
+        height: 400px;
+    }
+}

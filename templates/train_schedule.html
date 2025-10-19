@@ -1,0 +1,861 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Train Schedule Viewer</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            background-color: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .header {
+            margin-bottom: 30px;
+            padding: 20px;
+            background-color: #007cba;
+            color: white;
+            border-radius: 5px;
+        }
+        .train-info {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+        .info-item {
+            background-color: rgba(255,255,255,0.1);
+            padding: 10px;
+            border-radius: 4px;
+        }
+        .info-label {
+            font-size: 12px;
+            opacity: 0.8;
+            margin-bottom: 5px;
+        }
+        .info-value {
+            font-size: 16px;
+            font-weight: bold;
+        }
+        .schedule-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+            font-size: 13px;
+        }
+        .schedule-table th,
+        .schedule-table td {
+            border: 1px solid #ddd;
+            padding: 8px;
+            text-align: center;
+            vertical-align: top;
+            box-sizing: border-box;
+        }
+        .schedule-table th {
+            background-color: #f8f9fa;
+            font-weight: bold;
+            position: sticky;
+            top: 0;
+            z-index: 10;
+        }
+        .schedule-table tr:nth-child(even) {
+            background-color: #f9f9f9;
+        }
+        .location-cell {
+            text-align: left;
+            font-weight: bold;
+            min-width: 80px;
+        }
+        .time-cell {
+            font-family: monospace;
+            min-width: 70px;
+        }
+        .pred-time {
+            color: #007cba;
+            font-weight: bold;
+        }
+        .smart-pred-time {
+            color: #ff6b35;
+            font-weight: bold;
+            background-color: rgba(255, 107, 53, 0.1);
+            padding: 2px 4px;
+            border-radius: 3px;
+        }
+        .smart-confidence {
+            color: #8e44ad;
+            font-size: 10px;
+            font-weight: normal;
+        }
+        .actual-time {
+            color: #28a745;
+            font-weight: bold;
+        }
+        .delay-positive {
+            color: #dc3545;
+            font-weight: bold;
+        }
+        .delay-zero {
+            color: #28a745;
+        }
+        .associations-cell {
+            text-align: left;
+            font-size: 11px;
+            max-width: 150px;
+        }
+        .association-item {
+            background-color: #e9ecef;
+            margin: 2px 0;
+            padding: 3px 6px;
+            border-radius: 3px;
+            border-left: 3px solid #007cba;
+        }
+        .activities-cell {
+            text-align: left;
+            font-size: 11px;
+            max-width: 100px;
+        }
+        .activity-code {
+            background-color: #fff3cd;
+            padding: 1px 4px;
+            border-radius: 2px;
+            margin: 1px;
+            display: inline-block;
+        }
+        
+        /* Current location highlighting styles */
+        .current-location-row {
+            background-color: #fff3cd !important;
+            border-left: 5px solid #ffc107;
+        }
+        
+        .current-location-arrow {
+            position: absolute;
+            left: -8px;
+            top: 50%;
+            transform: translateY(-50%);
+            width: 0;
+            height: 0;
+            border-left: 8px solid #ffc107;
+            border-top: 6px solid transparent;
+            border-bottom: 6px solid transparent;
+            z-index: 5;
+        }
+        
+        .between-stations-row {
+            background-color: #e3f2fd !important;
+            border-left: 5px solid #2196f3;
+        }
+        
+        .between-stations-arrow {
+            position: absolute;
+            left: -8px;
+            top: 50%;
+            transform: translateY(-50%);
+            width: 0;
+            height: 0;
+            border-left: 8px solid #2196f3;
+            border-top: 6px solid transparent;
+            border-bottom: 6px solid transparent;
+            z-index: 5;
+        }
+        
+        .completed-journey-row {
+            background-color: #e8f5e8 !important;
+            border-left: 5px solid #28a745;
+        }
+        
+        .completed-arrow {
+            position: absolute;
+            left: -8px;
+            top: 50%;
+            transform: translateY(-50%);
+            width: 0;
+            height: 0;
+            border-left: 8px solid #28a745;
+            border-top: 6px solid transparent;
+            border-bottom: 6px solid transparent;
+            z-index: 5;
+        }
+        
+        .current-status-badge {
+            display: inline-block;
+            padding: 4px 8px;
+            border-radius: 12px;
+            font-size: 11px;
+            font-weight: bold;
+            margin-left: 10px;
+        }
+        
+        .status-at-station {
+            background-color: #ffc107;
+            color: #212529;
+        }
+        
+        .status-between-stations {
+            background-color: #2196f3;
+            color: white;
+        }
+        
+        .status-completed {
+            background-color: #28a745;
+            color: white;
+        }
+        .controls {
+            margin-bottom: 20px;
+            padding: 15px;
+            background-color: #f8f9fa;
+            border-radius: 5px;
+        }
+        .form-group {
+            margin-bottom: 10px;
+        }
+        label {
+            display: inline-block;
+            width: 120px;
+            font-weight: bold;
+        }
+        select, input {
+            padding: 5px;
+            border: 1px solid #ccc;
+            border-radius: 3px;
+            font-size: 14px;
+        }
+        button {
+            background-color: #007cba;
+            color: white;
+            padding: 8px 16px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            margin-left: 10px;
+        }
+        button:hover {
+            background-color: #005a8b;
+        }
+        .back-link {
+            color: white;
+            text-decoration: none;
+            background-color: rgba(255,255,255,0.2);
+            padding: 5px 10px;
+            border-radius: 3px;
+            display: inline-block;
+            margin-bottom: 15px;
+        }
+        .back-link:hover {
+            background-color: rgba(255,255,255,0.3);
+        }
+        .no-data {
+            color: #999;
+            font-style: italic;
+        }
+        .platform-cell {
+            min-width: 50px;
+        }
+        .smart-pred-time {
+            color: #ff6b35;
+            font-weight: bold;
+            background-color: rgba(255, 107, 53, 0.1);
+        }
+        .smart-confidence {
+            color: #8e44ad;
+            font-weight: bold;
+            text-align: center;
+            background-color: rgba(142, 68, 173, 0.1);
+        }
+        @media (max-width: 768px) {
+            .schedule-table {
+                font-size: 11px;
+            }
+            .schedule-table th,
+            .schedule-table td {
+                padding: 4px;
+            }
+            .train-info {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <a href="/debug" class="back-link">← Back to Debug Interface</a>
+            <h1>Train Schedule Viewer</h1>
+            
+            <div class="controls">
+                <div class="form-group">
+                    <label for="trainSelect">Select Train:</label>
+                    <select id="trainSelect" onchange="loadTrainSchedule()">
+                        <option value="">Loading trains...</option>
+                    </select>
+                    <button onclick="refreshTrainList()">Refresh List</button>
+                    <button id="refreshTrainBtn" onclick="refreshCurrentTrain()" disabled>Refresh Train Data</button>
+                    <button id="autoRefreshBtn" onclick="toggleAutoRefresh()">Enable Auto-Refresh (30s)</button>
+                </div>
+                <div id="errorMessage" style="color: red; margin-top: 10px; display: none;"></div>
+                <div id="refreshStatus" style="color: #007cba; margin-top: 10px; display: none;"></div>
+            </div>
+
+            <div id="trainInfo" class="train-info" style="display: none;">
+                <!-- Train info will be populated here -->
+            </div>
+        </div>
+
+        <div id="scheduleContainer" style="display: none;">
+            <h2>Schedule Details</h2>
+            <div style="overflow-x: auto;">
+                <table class="schedule-table" id="scheduleTable">
+                    <thead>
+                        <tr>
+                            <th>Seq</th>
+                            <th>Location</th>
+                            <th>Type</th>
+                            <th>Scheduled<br>Arrival</th>
+                            <th>Scheduled<br>Departure</th>
+                            <th>Scheduled<br>Pass</th>
+                            <th>Predicted<br>Arrival</th>
+                            <th>Predicted<br>Departure</th>
+                            <th>Predicted<br>Pass</th>
+                            <th style="background-color: rgba(255, 107, 53, 0.2);">Smart AI<br>Arrival</th>
+                            <th style="background-color: rgba(255, 107, 53, 0.2);">Smart AI<br>Departure</th>
+                            <th style="background-color: rgba(255, 107, 53, 0.2);">Smart AI<br>Pass</th>
+                            <th style="background-color: rgba(142, 68, 173, 0.2);">AI Confidence</th>
+                            <th>Actual<br>Arrival</th>
+                            <th>Actual<br>Departure</th>
+                            <th>Actual<br>Pass</th>
+                            <th>Path</th>
+                            <th>Platform</th>
+                            <th>Line</th>
+                            <th>Delay<br>(min)</th>
+                            <th>Activities</th>
+                            <th>Associations</th>
+                            <th>Allowances</th>
+                        </tr>
+                    </thead>
+                    <tbody id="scheduleBody">
+                        <!-- Schedule data will be populated here -->
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <div id="loadingMessage" style="text-align: center; padding: 40px; color: #666;">
+            Select a train to view its schedule
+        </div>
+    </div>
+
+    <script>
+        let trains = [];
+
+        // Load trains on page load
+        document.addEventListener('DOMContentLoaded', function() {
+            refreshTrainList();
+        });
+
+        async function refreshTrainList() {
+            try {
+                const response = await fetch('/api/trains/active_trains');
+                trains = await response.json();
+                
+                const trainSelect = document.getElementById('trainSelect');
+                trainSelect.innerHTML = '<option value="">Select a train...</option>';
+                
+                trains.forEach(train => {
+                    const option = document.createElement('option');
+                    option.value = train.uid;
+                    option.textContent = `${train.headcode} (${train.uid}) - ${train.detected ? 'Active' : 'Planned'}`;
+                    trainSelect.appendChild(option);
+                });
+                
+                console.log(`Loaded ${trains.length} trains`);
+            } catch (error) {
+                console.error('Error loading trains:', error);
+                document.getElementById('trainSelect').innerHTML = '<option value="">Error loading trains</option>';
+            }
+        }
+
+        function loadTrainSchedule() {
+            const selectedUid = document.getElementById('trainSelect').value;
+            if (!selectedUid) {
+                hideSchedule();
+                return;
+            }
+
+            const train = trains.find(t => t.uid === selectedUid);
+            if (!train) {
+                hideSchedule();
+                return;
+            }
+
+            displayTrainInfo(train);
+            displaySchedule(train);
+        }
+
+        function displayTrainInfo(train) {
+            const trainInfo = document.getElementById('trainInfo');
+            trainInfo.style.display = 'grid';
+            
+            trainInfo.innerHTML = `
+                <div class="info-item">
+                    <div class="info-label">Headcode</div>
+                    <div class="info-value">${train.headcode}</div>
+                </div>
+                <div class="info-item">
+                    <div class="info-label">UID</div>
+                    <div class="info-value">${train.uid}</div>
+                </div>
+                <div class="info-item">
+                    <div class="info-label">Status</div>
+                    <div class="info-value">${train.terminated ? 'Terminated' : train.cancelled ? 'Cancelled' : train.detected ? 'Active' : 'Planned'}</div>
+                </div>
+                <div class="info-item">
+                    <div class="info-label">Current Position</div>
+                    <div class="info-value">${train.current_location || 'Position unknown'}</div>
+                </div>
+                <div class="info-item">
+                    <div class="info-label">Current Berth</div>
+                    <div class="info-value">${train.berth || train.current_berth_id || 'None'}</div>
+                </div>
+                <div class="info-item">
+                    <div class="info-label">Current Delay</div>
+                    <div class="info-value">${train.delay || 0} minutes</div>
+                </div>
+                <div class="info-item">
+                    <div class="info-label">Schedule Type</div>
+                    <div class="info-value">${train.schedule ? train.schedule.stp_indicator : 'Unknown'}</div>
+                </div>
+                <div class="info-item">
+                    <div class="info-label">Service Code</div>
+                    <div class="info-value">${train.schedule ? train.schedule.service_code : 'Unknown'}</div>
+                </div>
+            `;
+        }
+
+        function displaySchedule(train) {
+            const scheduleContainer = document.getElementById('scheduleContainer');
+            const scheduleBody = document.getElementById('scheduleBody');
+            const loadingMessage = document.getElementById('loadingMessage');
+            
+            if (!train.schedule || !train.schedule.locations) {
+                hideSchedule();
+                loadingMessage.textContent = 'No schedule data available for this train';
+                return;
+            }
+
+            loadingMessage.style.display = 'none';
+            scheduleContainer.style.display = 'block';
+            
+            // Sort locations by sequence
+            const locations = train.schedule.locations.sort((a, b) => a.sequence - b.sequence);
+            
+            scheduleBody.innerHTML = '';
+            
+            locations.forEach((location, index) => {
+                const row = document.createElement('tr');
+                
+                // Determine if this is the current position
+                const positionInfo = determineCurrentPosition(train, locations, index);
+                if (positionInfo.isCurrent) {
+                    row.className = positionInfo.className;
+                    // Add arrow element
+                    const arrow = document.createElement('div');
+                    arrow.className = positionInfo.arrowClass;
+                    row.appendChild(arrow);
+                }
+                
+                // Build associations display
+                let associationsHtml = '';
+                if (location.associations && Object.keys(location.associations).length > 0) {
+                    console.log(`Found associations at ${location.tiploc}:`, location.associations);
+                    Object.entries(location.associations).forEach(([headcode, assoc]) => {
+                        associationsHtml += `
+                            <div class="association-item">
+                                <strong>${assoc.association_type}</strong> ${headcode}<br>
+                                <small>UID: ${assoc.associated_uid}</small>
+                            </div>
+                        `;
+                    });
+                } else {
+                    // Debug: check if associations field exists but is empty
+                    if (location.associations !== undefined) {
+                        console.log(`Empty associations at ${location.tiploc}:`, location.associations);
+                    }
+                }
+
+                // Build activities display
+                let activitiesHtml = '';
+                if (location.activity) {
+                    const activities = location.activity.match(/.{1,2}/g) || [];
+                    activities.forEach(code => {
+                        if (code.trim()) {
+                            activitiesHtml += `<span class="activity-code">${code}</span>`;
+                        }
+                    });
+                }
+
+                // Build allowances display
+                let allowancesHtml = '';
+                const allowances = [];
+                if (location.engineering_allowance) allowances.push(`Eng: ${location.engineering_allowance}`);
+                if (location.pathing_allowance) allowances.push(`Path: ${location.pathing_allowance}`);
+                if (location.performance_allowance) allowances.push(`Perf: ${location.performance_allowance}`);
+                allowancesHtml = allowances.join('<br>');
+
+                row.innerHTML = `
+                    <td>${location.sequence}</td>
+                    <td class="location-cell">${location.tiploc}</td>
+                    <td>${location.location_type}</td>
+                    <td class="time-cell">${location.arr_time || ''}</td>
+                    <td class="time-cell">${location.dep_time || ''}</td>
+                    <td class="time-cell">${location.pass_time || ''}</td>
+                    <td class="time-cell pred-time">${location.pred_arr || ''}</td>
+                    <td class="time-cell pred-time">${location.pred_dep || ''}</td>
+                    <td class="time-cell pred-time">${location.pred_pass || ''}</td>
+                    <td class="time-cell smart-pred-time">${location.smart_pred_arr || ''}</td>
+                    <td class="time-cell smart-pred-time">${location.smart_pred_dep || ''}</td>
+                    <td class="time-cell smart-pred-time">${location.smart_pred_pass || ''}</td>
+                    <td class="time-cell smart-confidence">${location.smart_pred_confidence ? (location.smart_pred_confidence * 100).toFixed(0) + '%' : ''}</td>
+                    <td class="time-cell actual-time">${location.actual_arr || ''}</td>
+                    <td class="time-cell actual-time">${location.actual_dep || ''}</td>
+                    <td class="time-cell actual-time">${location.actual_pass || ''}</td>
+                    <td>${location.path || ''}</td>
+                    <td class="platform-cell">${location.platform || ''}</td>
+                    <td>${location.line || ''}</td>
+                    <td class="${location.pred_delay_min > 0 ? 'delay-positive' : 'delay-zero'}">${location.pred_delay_min || 0}</td>
+                    <td class="activities-cell">${activitiesHtml}</td>
+                    <td class="associations-cell">${associationsHtml}</td>
+                    <td class="activities-cell" style="font-size: 10px;">${allowancesHtml}</td>
+                `;
+                
+                scheduleBody.appendChild(row);
+            });
+        }
+
+        function determineCurrentPosition(train, locations, index) {
+            const location = locations[index];
+            
+            // Check for actual times to determine precise position
+            if (location.actual_arr && !location.actual_dep) {
+                // Train has arrived but not departed - at this station
+                return {
+                    isCurrent: true,
+                    className: 'current-location-row',
+                    arrowClass: 'current-location-arrow'
+                };
+            }
+            
+            if (location.actual_dep || location.actual_pass) {
+                // Train has departed or passed this location
+                if (index === locations.length - 1) {
+                    // This is the last location - journey complete
+                    return {
+                        isCurrent: true,
+                        className: 'completed-journey-row',
+                        arrowClass: 'completed-arrow'
+                    };
+                } else {
+                    // Check if next location has any actual times
+                    const nextLocation = locations[index + 1];
+                    if (!nextLocation.actual_arr && !nextLocation.actual_dep && !nextLocation.actual_pass) {
+                        // No actual times at next location - train is between stations
+                        return {
+                            isCurrent: true,
+                            className: 'between-stations-row',
+                            arrowClass: 'between-stations-arrow'
+                        };
+                    }
+                }
+            }
+            
+            // Fallback to current_location field matching
+            if (train.current_location) {
+                if (train.current_location.includes(`At ${location.tiploc}`)) {
+                    return {
+                        isCurrent: true,
+                        className: 'current-location-row',
+                        arrowClass: 'current-location-arrow'
+                    };
+                }
+                if (train.current_location.includes(`Between ${location.tiploc}`)) {
+                    return {
+                        isCurrent: true,
+                        className: 'between-stations-row',
+                        arrowClass: 'between-stations-arrow'
+                    };
+                }
+                if (train.current_location.includes(`Departed ${location.tiploc}`)) {
+                    return {
+                        isCurrent: true,
+                        className: 'completed-journey-row',
+                        arrowClass: 'completed-arrow'
+                    };
+                }
+            }
+            
+            return { isCurrent: false };
+        }
+
+        function hideSchedule() {
+            document.getElementById('trainInfo').style.display = 'none';
+            document.getElementById('scheduleContainer').style.display = 'none';
+            document.getElementById('loadingMessage').style.display = 'block';
+            document.getElementById('loadingMessage').textContent = 'Select a train to view its schedule';
+        }
+
+        // Global variables for refresh functionality
+        let currentTrainUID = null;
+        let autoRefreshInterval = null;
+        let isAutoRefreshEnabled = false;
+
+        // Enhanced loadTrainSchedule to track current UID
+        const originalLoadTrainSchedule = loadTrainSchedule;
+        loadTrainSchedule = function() {
+            const select = document.getElementById('trainSelect');
+            const selectedValue = select.value;
+            
+            if (selectedValue) {
+                currentTrainUID = selectedValue.split(' - ')[0]; // Extract UID from "UID - HEADCODE"
+                document.getElementById('refreshTrainBtn').disabled = false;
+                showRefreshStatus('Loading train data...');
+            } else {
+                currentTrainUID = null;
+                document.getElementById('refreshTrainBtn').disabled = true;
+                clearRefreshStatus();
+            }
+            
+            originalLoadTrainSchedule();
+        };
+
+        // Refresh current train data
+        async function refreshCurrentTrain() {
+            if (!currentTrainUID) {
+                showError('No train selected for refresh');
+                return;
+            }
+
+            try {
+                showRefreshStatus('Refreshing train data...');
+                const response = await fetch(`/api/trains/by_uid/${currentTrainUID}`);
+                const data = await response.json();
+
+                if (!data.success) {
+                    showError(`Failed to refresh train data: ${data.error || 'Unknown error'}`);
+                    return;
+                }
+
+                if (!data.trains || data.trains.length === 0) {
+                    showError('No train data received from server');
+                    return;
+                }
+
+                if (data.trains.length > 1) {
+                    showError(`Warning: Received ${data.trains.length} trains for UID ${currentTrainUID}. Using first train. This may indicate a data issue.`);
+                }
+
+                // Use the first train from the response
+                const trainData = data.trains[0];
+                
+                // Update the train display with fresh data
+                updateTrainDisplay(trainData);
+                
+                showRefreshStatus(`Train data refreshed at ${new Date().toLocaleTimeString()}`);
+                setTimeout(clearRefreshStatus, 3000);
+
+            } catch (error) {
+                console.error('Error refreshing train data:', error);
+                showError(`Error refreshing train data: ${error.message}`);
+            }
+        }
+
+        // Toggle auto-refresh
+        function toggleAutoRefresh() {
+            const button = document.getElementById('autoRefreshBtn');
+            
+            if (isAutoRefreshEnabled) {
+                // Disable auto-refresh
+                clearInterval(autoRefreshInterval);
+                autoRefreshInterval = null;
+                isAutoRefreshEnabled = false;
+                button.textContent = 'Enable Auto-Refresh (30s)';
+                button.style.backgroundColor = '';
+                showRefreshStatus('Auto-refresh disabled');
+                setTimeout(clearRefreshStatus, 2000);
+            } else {
+                // Enable auto-refresh
+                if (!currentTrainUID) {
+                    showError('Please select a train first');
+                    return;
+                }
+                
+                autoRefreshInterval = setInterval(refreshCurrentTrain, 30000); // 30 seconds
+                isAutoRefreshEnabled = true;
+                button.textContent = 'Disable Auto-Refresh';
+                button.style.backgroundColor = '#28a745';
+                button.style.color = 'white';
+                showRefreshStatus('Auto-refresh enabled (every 30 seconds)');
+                setTimeout(clearRefreshStatus, 3000);
+            }
+        }
+
+        // Update train display with new data
+        function updateTrainDisplay(trainData) {
+            // Update train info section
+            const trainInfoDiv = document.getElementById('trainInfo');
+            if (trainInfoDiv) {
+                trainInfoDiv.innerHTML = `
+                    <div class="info-item">
+                        <div class="info-label">UID</div>
+                        <div class="info-value">${trainData.uid}</div>
+                    </div>
+                    <div class="info-item">
+                        <div class="info-label">Headcode</div>
+                        <div class="info-value">${trainData.headcode}</div>
+                    </div>
+                    <div class="info-item">
+                        <div class="info-label">Service Code</div>
+                        <div class="info-value">${trainData.schedule?.service_code || 'N/A'}</div>
+                    </div>
+                    <div class="info-item">
+                        <div class="info-label">Category</div>
+                        <div class="info-value">${trainData.schedule?.train_category || 'N/A'}</div>
+                    </div>
+                    <div class="info-item">
+                        <div class="info-label">Power Type</div>
+                        <div class="info-value">${trainData.schedule?.power_type || 'N/A'}</div>
+                    </div>
+                    <div class="info-item">
+                        <div class="info-label">Status</div>
+                        <div class="info-value">${trainData.terminated ? 'Terminated' : trainData.cancelled ? 'Cancelled' : trainData.detected ? 'Active' : 'Planned'}</div>
+                    </div>
+                    <div class="info-item">
+                        <div class="info-label">Current Position</div>
+                        <div class="info-value">${trainData.current_location || 'Position unknown'}</div>
+                    </div>
+                    <div class="info-item">
+                        <div class="info-label">Current Berth</div>
+                        <div class="info-value">${trainData.current_berth_id || 'None'}</div>
+                    </div>
+                `;
+            }
+
+            // Update schedule table if we have schedule and locations
+            if (trainData.schedule && trainData.schedule.locations && trainData.schedule.locations.length > 0) {
+                const scheduleBody = document.getElementById('scheduleBody');
+                if (scheduleBody) {
+                    scheduleBody.innerHTML = '';
+                    
+                    const locations = trainData.schedule.locations.sort((a, b) => a.sequence - b.sequence);
+                    
+                    locations.forEach((location, index) => {
+                        const row = document.createElement('tr');
+                        
+                        // Determine current position
+                        const positionInfo = determineCurrentPosition(trainData, locations, index);
+                        if (positionInfo.isCurrent) {
+                            row.className = positionInfo.className;
+                            const arrow = document.createElement('div');
+                            arrow.className = positionInfo.arrowClass;
+                            row.appendChild(arrow);
+                        }
+
+                        // Build activities display
+                        let activitiesHtml = '';
+                        if (location.activity) {
+                            const activities = location.activity.match(/.{1,2}/g) || [];
+                            activitiesHtml = activities.map(act => `<span class="activity-code">${act}</span>`).join(' ');
+                        }
+
+                        // Build associations display
+                        let associationsHtml = '';
+                        if (location.associations && Object.keys(location.associations).length > 0) {
+                            Object.entries(location.associations).forEach(([headcode, assoc]) => {
+                                associationsHtml += `
+                                    <div class="association-item">
+                                        <strong>${assoc.association_type}</strong> ${headcode}<br>
+                                        <small>UID: ${assoc.associated_uid}</small>
+                                    </div>
+                                `;
+                            });
+                        } else {
+                            console.log(`Empty associations at ${location.tiploc}:`, {});
+                        }
+
+                        // Build allowances display
+                        let allowancesHtml = '';
+                        const allowances = [];
+                        if (location.engineering_allowance) allowances.push(`Eng: ${location.engineering_allowance}`);
+                        if (location.pathing_allowance) allowances.push(`Path: ${location.pathing_allowance}`);
+                        if (location.performance_allowance) allowances.push(`Perf: ${location.performance_allowance}`);
+                        allowancesHtml = allowances.join('<br>');
+
+                        row.innerHTML += `
+                            <td>${location.sequence}</td>
+                            <td class="location-cell">${location.tiploc}</td>
+                            <td>${location.location_type}</td>
+                            <td class="time-cell">${location.arr_time || ''}</td>
+                            <td class="time-cell">${location.dep_time || ''}</td>
+                            <td class="time-cell">${location.pass_time || ''}</td>
+                            <td class="time-cell pred-time">${location.pred_arr || ''}</td>
+                            <td class="time-cell pred-time">${location.pred_dep || ''}</td>
+                            <td class="time-cell pred-time">${location.pred_pass || ''}</td>
+                            <td class="time-cell smart-pred-time">${location.smart_pred_arr || ''}</td>
+                            <td class="time-cell smart-pred-time">${location.smart_pred_dep || ''}</td>
+                            <td class="time-cell smart-pred-time">${location.smart_pred_pass || ''}</td>
+                            <td class="time-cell smart-confidence">${location.smart_pred_confidence ? (location.smart_pred_confidence * 100).toFixed(0) + '%' : ''}</td>
+                            <td class="time-cell actual-time">${location.actual_arr || ''}</td>
+                            <td class="time-cell actual-time">${location.actual_dep || ''}</td>
+                            <td class="time-cell actual-time">${location.actual_pass || ''}</td>
+                            <td>${location.path || ''}</td>
+                            <td class="platform-cell">${location.platform || ''}</td>
+                            <td>${location.line || ''}</td>
+                            <td class="${location.pred_delay_min > 0 ? 'delay-positive' : 'delay-zero'}">${location.pred_delay_min || 0}</td>
+                            <td class="activities-cell">${activitiesHtml}</td>
+                            <td class="associations-cell">${associationsHtml}</td>
+                            <td class="activities-cell" style="font-size: 10px;">${allowancesHtml}</td>
+                        `;
+                        
+                        scheduleBody.appendChild(row);
+                    });
+                }
+            }
+        }
+
+        // Utility functions for status messages
+        function showError(message) {
+            const errorDiv = document.getElementById('errorMessage');
+            errorDiv.textContent = message;
+            errorDiv.style.display = 'block';
+            clearRefreshStatus();
+            setTimeout(() => {
+                errorDiv.style.display = 'none';
+            }, 5000);
+        }
+
+        function showRefreshStatus(message) {
+            const statusDiv = document.getElementById('refreshStatus');
+            statusDiv.textContent = message;
+            statusDiv.style.display = 'block';
+            document.getElementById('errorMessage').style.display = 'none';
+        }
+
+        function clearRefreshStatus() {
+            document.getElementById('refreshStatus').style.display = 'none';
+        }
+
+        // Clean up auto-refresh when page unloads
+        window.addEventListener('beforeunload', function() {
+            if (autoRefreshInterval) {
+                clearInterval(autoRefreshInterval);
+            }
+        });
+    </script>
+</body>
+</html>

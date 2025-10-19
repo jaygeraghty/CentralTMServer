@@ -1,0 +1,216 @@
+{% extends "base.html" %}
+
+{% block title %}Platform Docker{% endblock %}
+
+{% block content %}
+<div class="container-fluid mt-4">
+    <div class="row">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header">
+                    <h2>Platform Docker Visualization</h2>
+                    <p class="text-muted">View train movements at a specific location by platform and time</p>
+                </div>
+                <div class="card-body">
+                    <!-- Form -->
+                    <form id="platformForm" class="mb-4">
+                        <div class="row g-3">
+                            <div class="col-md-6">
+                                <label for="locationCode" class="form-label">Location Code (TIPLOC)</label>
+                                <input type="text" class="form-control" id="locationCode" value="CHRX" required>
+                                <small class="form-text text-muted">Common locations: CHRX, WLOE</small>
+                            </div>
+                            <div class="col-md-6">
+                                <label for="dateSelect" class="form-label">Date</label>
+                                <input type="date" class="form-control" id="dateSelect" value="2025-05-19" required>
+                            </div>
+                            <div class="col-12">
+                                <button type="submit" class="btn btn-primary">Generate Platform Docker</button>
+                            </div>
+                        </div>
+                    </form>
+                    
+                    <!-- Platform Docker Graph -->
+                    <div id="platformDockerContainer" class="mt-4">
+                        <canvas id="platformGraph" width="1000" height="500" style="background-color: #1e2124;"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Canvas initialization for platform docker
+    const canvas = document.getElementById('platformGraph');
+    const ctx = canvas.getContext('2d');
+    
+    // Set canvas dimensions to match display size
+    function resizeCanvas() {
+        const container = document.getElementById('platformDockerContainer');
+        const displayWidth = container.clientWidth;
+        const displayHeight = 500;
+        
+        // Set logical size
+        canvas.width = displayWidth;
+        canvas.height = displayHeight;
+        
+        // Clear canvas
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+    }
+    
+    // Initial resize
+    resizeCanvas();
+    
+    // Handle window resize
+    window.addEventListener('resize', resizeCanvas);
+    
+    // Sample data for demonstration
+    const sampleData = {
+        platforms: [
+            { name: '1', trains: [
+                { uid: 'P12345', headcode: '1A01', arrival_time: '0930', departure_time: '0935' },
+                { uid: 'P67890', headcode: '1A03', arrival_time: '1130', departure_time: '1135' }
+            ]},
+            { name: '2', trains: [
+                { uid: 'P23456', headcode: '2A01', arrival_time: '0945', departure_time: '0950' }
+            ]},
+            { name: '3', trains: [
+                { uid: 'P34567', headcode: '3A01', arrival_time: '1000', departure_time: '1005' }
+            ]},
+            { name: '4', trains: [
+                { uid: 'P45678', headcode: '4A01', arrival_time: '1015', departure_time: '1020' }
+            ]}
+        ]
+    };
+    
+    // Draw the platform docker visualization
+    function drawPlatformDocker() {
+        // Clear canvas
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        
+        // Set colors and drawing styles
+        const colors = {
+            background: '#1e2124',
+            grid: '#3a3f47',
+            text: '#ffffff',
+            train: '#3498db'
+        };
+        
+        // Set dimensions and margins
+        const margin = { top: 50, right: 20, bottom: 20, left: 80 };
+        const graphWidth = canvas.width - margin.left - margin.right;
+        const graphHeight = canvas.height - margin.top - margin.bottom;
+        
+        // Draw background
+        ctx.fillStyle = colors.background;
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        
+        // Time configuration (hours to display)
+        const startHour = 6;  // 6:00
+        const endHour = 22;   // 22:00
+        const totalHours = endHour - startHour;
+        
+        // Function to convert time to x-coordinate
+        function timeToX(timeStr) {
+            const hours = parseInt(timeStr.substring(0, 2));
+            const minutes = parseInt(timeStr.substring(2, 4));
+            const totalMinutes = (hours * 60) + minutes;
+            const startMinutes = startHour * 60;
+            const endMinutes = endHour * 60;
+            
+            return margin.left + ((totalMinutes - startMinutes) / (endMinutes - startMinutes) * graphWidth);
+        }
+        
+        // Draw time axis (top)
+        ctx.beginPath();
+        ctx.moveTo(margin.left, margin.top);
+        ctx.lineTo(margin.left + graphWidth, margin.top);
+        ctx.strokeStyle = colors.grid;
+        ctx.stroke();
+        
+        // Draw hour marks and labels
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'bottom';
+        ctx.fillStyle = colors.text;
+        ctx.font = '12px Arial';
+        
+        for (let hour = startHour; hour <= endHour; hour++) {
+            const x = margin.left + ((hour - startHour) / totalHours * graphWidth);
+            
+            // Draw vertical grid line
+            ctx.beginPath();
+            ctx.moveTo(x, margin.top);
+            ctx.lineTo(x, margin.top + graphHeight);
+            ctx.strokeStyle = colors.grid;
+            ctx.setLineDash([5, 5]);
+            ctx.stroke();
+            ctx.setLineDash([]);
+            
+            // Draw hour label
+            ctx.fillText(`${hour.toString().padStart(2, '0')}:00`, x, margin.top - 5);
+        }
+        
+        // Calculate platform row height - make it 1/4 of the original height
+        const platformCount = sampleData.platforms.length;
+        const platformRowHeight = (graphHeight / platformCount) * 0.25;
+        
+        // Draw platforms and trains with spacing between rows
+        const platformGap = 10; // Gap between platform rows
+        sampleData.platforms.forEach((platform, index) => {
+            const y = margin.top + (index * (platformRowHeight + platformGap));
+            
+            // Draw platform label
+            ctx.textAlign = 'right';
+            ctx.textBaseline = 'middle';
+            ctx.fillStyle = colors.text;
+            ctx.font = '14px Arial';
+            ctx.fillText(`Platform ${platform.name}`, margin.left - 10, y + platformRowHeight / 2);
+            
+            // Draw horizontal line for platform
+            ctx.beginPath();
+            ctx.moveTo(margin.left, y + platformRowHeight);
+            ctx.lineTo(margin.left + graphWidth, y + platformRowHeight);
+            ctx.strokeStyle = colors.grid;
+            ctx.stroke();
+            
+            // Draw trains on this platform
+            platform.trains.forEach(train => {
+                // Calculate positions
+                const arrivalX = timeToX(train.arrival_time);
+                const departureX = timeToX(train.departure_time);
+                const trainY = y + platformRowHeight * 0.1;
+                const trainHeight = platformRowHeight * 0.8;
+                
+                // Draw train bar
+                ctx.fillStyle = colors.train;
+                ctx.beginPath();
+                ctx.rect(arrivalX, trainY, departureX - arrivalX, trainHeight);
+                ctx.fill();
+                
+                // Add train label if there's enough space
+                if (departureX - arrivalX > 50) {
+                    ctx.fillStyle = '#ffffff';
+                    ctx.textAlign = 'left';
+                    ctx.textBaseline = 'middle';
+                    ctx.font = '12px Arial';
+                    ctx.fillText(train.headcode, arrivalX + 5, trainY + trainHeight / 2);
+                }
+            });
+        });
+    }
+    
+    // Draw the initial view
+    drawPlatformDocker();
+    
+    // Handle form submission
+    document.getElementById('platformForm').addEventListener('submit', function(e) {
+        e.preventDefault();
+        // In a real implementation, this would fetch data and then redraw
+        // For now, just redraw with sample data
+        drawPlatformDocker();
+    });
+});
+</script>
+{% endblock %}

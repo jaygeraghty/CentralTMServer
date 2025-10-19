@@ -1,0 +1,112 @@
+{% extends 'base.html' %}
+
+{% block title %}Schedules for {{ location }} on {{ date }}{% endblock %}
+
+{% block content %}
+<div class="mb-4">
+    <a href="{{ url_for('web.index') }}" class="btn btn-secondary">← Back to Search</a>
+</div>
+
+<div class="card">
+    <div class="card-header d-flex justify-content-between align-items-center">
+        <h2 class="h4 mb-0">Schedules for {{ location }} on {{ date }}</h2>
+        <span class="badge bg-primary">{{ count }} trains</span>
+    </div>
+    
+    {% if count > 0 %}
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-striped table-hover mb-0">
+                <thead>
+                    <tr>
+                        <th>Train ID</th>
+                        <th>Origin</th>
+                        <th>Destination</th>
+                        <th>Arrival</th>
+                        <th>Departure</th>
+                        <th>Platform</th>
+                        <th>Status</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for schedule in schedules %}
+                        {% set origin = schedule.locations|selectattr('location_type', 'equalto', 'LO')|first %}
+                        {% set destination = schedule.locations|selectattr('location_type', 'equalto', 'LT')|first %}
+                        {% set current_stop = schedule.locations|selectattr('tiploc', 'equalto', location)|first %}
+                        
+                        <tr>
+                            <td>
+                                <span class="badge bg-info">{{ schedule.train_identity }}</span>
+                                <div class="small text-muted">{{ schedule.uid }}</div>
+                            </td>
+                            <td>{{ origin.tiploc if origin else 'Unknown' }}</td>
+                            <td>{{ destination.tiploc if destination else 'Unknown' }}</td>
+                            <td>{{ current_stop.arr if current_stop and current_stop.arr else '-' }}</td>
+                            <td>{{ current_stop.dep if current_stop and current_stop.dep else '-' }}</td>
+                            <td>{{ current_stop.platform if current_stop and current_stop.platform else '-' }}</td>
+                            <td>
+                                {% if schedule.stp_indicator == 'C' %}
+                                    <span class="badge bg-danger">Cancelled</span>
+                                {% elif schedule.stp_indicator == 'N' %}
+                                    <span class="badge bg-success">New</span>
+                                {% elif schedule.stp_indicator == 'O' %}
+                                    <span class="badge bg-warning">Changed</span>
+                                {% else %}
+                                    <span class="badge bg-secondary">Regular</span>
+                                {% endif %}
+                            </td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+    {% else %}
+    <div class="card-body">
+        <p class="text-center mb-0">No schedules found for this location and date.</p>
+    </div>
+    {% endif %}
+</div>
+
+{% if associations|length > 0 %}
+<div class="card mt-4">
+    <div class="card-header">
+        <h3 class="h5 mb-0">Train Associations at {{ location }}</h3>
+    </div>
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-striped mb-0">
+                <thead>
+                    <tr>
+                        <th>Main Train</th>
+                        <th>Associated Train</th>
+                        <th>Type</th>
+                        <th>Date Range</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for assoc in associations %}
+                    <tr>
+                        <td>{{ assoc.main_uid }}</td>
+                        <td>{{ assoc.assoc_uid }}</td>
+                        <td>
+                            {% if assoc.category == 'JJ' %}
+                                <span class="badge bg-info">Join</span>
+                            {% elif assoc.category == 'VV' %}
+                                <span class="badge bg-warning">Divide</span>
+                            {% elif assoc.category == 'NP' %}
+                                <span class="badge bg-secondary">Next</span>
+                            {% else %}
+                                <span class="badge bg-secondary">{{ assoc.category }}</span>
+                            {% endif %}
+                        </td>
+                        <td>{{ assoc.date_from }} to {{ assoc.date_to }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endif %}
+{% endblock %}

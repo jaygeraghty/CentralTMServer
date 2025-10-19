@@ -1,0 +1,543 @@
+{% extends "base.html" %}
+
+{% block title %}Platform Docker{% endblock %}
+
+{% block head %}
+{{ super() }}
+<style>
+    .platform-container {
+        width: 100%;
+        overflow-x: auto;
+        background-color: #1e2124;
+        position: relative;
+    }
+    
+    .platform-svg {
+        background-color: #1e2124;
+    }
+    
+    .time-axis text {
+        fill: white;
+        font-size: 10px;
+    }
+    
+    .time-axis path, .time-axis line {
+        stroke: #3a3f47;
+    }
+    
+    .grid-line {
+        stroke: #3a3f47;
+        stroke-width: 0.5;
+        stroke-dasharray: 2,2;
+    }
+    
+    .grid-line-hour {
+        stroke: #3a3f47;
+        stroke-width: 1;
+        stroke-dasharray: 3,3;
+    }
+    
+    .platform-label {
+        fill: white;
+        font-size: 14px;
+        font-weight: bold;
+        text-anchor: end;
+    }
+    
+    .fixed-column {
+        position: absolute;
+        background-color: #1e2124;
+        padding-right: 10px;
+        z-index: 100;
+        border-right: 2px solid #3a3f47;
+    }
+    
+    .train-event {
+        stroke: rgba(255, 255, 255, 0.3);
+        stroke-width: 1;
+        rx: 3;
+        ry: 3;
+    }
+    
+    .train-label {
+        fill: white;
+        font-size: 10px;
+    }
+    
+    .tooltip {
+        position: absolute;
+        padding: 8px;
+        background: #2a2e33;
+        border: 1px solid #3a3f47;
+        border-radius: 4px;
+        pointer-events: none;
+        color: white;
+        font-size: 12px;
+        opacity: 0;
+        z-index: 1000;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid mt-4">
+    <div class="row">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header">
+                    <h2>Platform Docker Visualization</h2>
+                    <p class="text-muted">View train movements at a specific location by platform and time</p>
+                </div>
+                <div class="card-body">
+                    <!-- Form -->
+                    <form id="platformForm" class="mb-4">
+                        <div class="row g-3">
+                            <div class="col-md-6">
+                                <label for="locationCode" class="form-label">Location Code (TIPLOC)</label>
+                                <input type="text" class="form-control" id="locationCode" value="CHRX" required>
+                                <small class="form-text text-muted">Common locations: CHRX, WLOE</small>
+                            </div>
+                            <div class="col-md-6">
+                                <label for="dateSelect" class="form-label">Date</label>
+                                <input type="date" class="form-control" id="dateSelect" required>
+                            </div>
+                            <div class="col-12">
+                                <button type="submit" class="btn btn-primary">Generate Platform Docker</button>
+                            </div>
+                        </div>
+                    </form>
+                    
+                    <!-- Zoom Controls -->
+                    <div class="mb-3">
+                        <div class="btn-group">
+                            <button class="btn btn-outline-primary" id="zoomIn">Zoom In</button>
+                            <button class="btn btn-outline-primary" id="zoomOut">Zoom Out</button>
+                            <button class="btn btn-outline-primary" id="reset">Reset</button>
+                        </div>
+                    </div>
+                    
+                    <!-- Loading indicator -->
+                    <div id="loadingIndicator" class="text-center d-none">
+                        <div class="spinner-border text-primary" role="status">
+                            <span class="visually-hidden">Loading...</span>
+                        </div>
+                        <p>Loading platform data...</p>
+                    </div>
+                    
+                    <!-- Platform Docker -->
+                    <div id="platformDocker" class="platform-container" style="height: 600px;">
+                        <!-- D3 will render here -->
+                    </div>
+                    
+                    <!-- Tooltip -->
+                    <div id="tooltip" class="tooltip"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Include D3.js -->
+<script src="https://d3js.org/d3.v7.min.js"></script>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Initialize with today's date
+    document.getElementById('dateSelect').valueAsDate = new Date();
+    
+    // Mock data for visualization
+    const mockData = {
+        location: 'CHRX',
+        date: '2025-05-19',
+        platforms: [
+            {
+                name: '1',
+                events: [
+                    {uid: 'P12345', headcode: '1A01', arrival_time: '0730', departure_time: '0735', train_status: 'P'},
+                    {uid: 'P23456', headcode: '1A02', arrival_time: '0830', departure_time: '0835', train_status: 'P'},
+                    {uid: 'P34567', headcode: '1A03', arrival_time: '0930', departure_time: '0935', train_status: 'P'},
+                    {uid: 'P45678', headcode: '1A04', arrival_time: '1030', departure_time: '1035', train_status: 'P'},
+                    {uid: 'P56789', headcode: '1A05', arrival_time: '1130', departure_time: '1135', train_status: 'P'}
+                ]
+            },
+            {
+                name: '2',
+                events: [
+                    {uid: 'Q12345', headcode: '2A01', arrival_time: '0745', departure_time: '0750', train_status: 'P'},
+                    {uid: 'Q23456', headcode: '2A02', arrival_time: '0845', departure_time: '0850', train_status: 'P'},
+                    {uid: 'Q34567', headcode: '2A03', arrival_time: '0945', departure_time: '0950', train_status: 'P'},
+                    {uid: 'Q45678', headcode: '2A04', arrival_time: '1045', departure_time: '1050', train_status: 'P'},
+                    {uid: 'Q56789', headcode: '2A05', arrival_time: '1145', departure_time: '1150', train_status: 'P'}
+                ]
+            },
+            {
+                name: '3',
+                events: [
+                    {uid: 'R12345', headcode: '3A01', arrival_time: '0800', departure_time: '0805', train_status: 'P'},
+                    {uid: 'R23456', headcode: '3A02', arrival_time: '0900', departure_time: '0905', train_status: 'P'},
+                    {uid: 'R34567', headcode: '3A03', arrival_time: '1000', departure_time: '1005', train_status: 'P'},
+                    {uid: 'R45678', headcode: '3A04', arrival_time: '1100', departure_time: '1105', train_status: 'P'},
+                    {uid: 'R56789', headcode: '3A05', arrival_time: '1200', departure_time: '1205', train_status: 'P'}
+                ]
+            },
+            {
+                name: '4',
+                events: [
+                    {uid: 'S12345', headcode: '4A01', arrival_time: '0815', departure_time: '0820', train_status: 'P'},
+                    {uid: 'S23456', headcode: '4A02', arrival_time: '0915', departure_time: '0920', train_status: 'P'},
+                    {uid: 'S34567', headcode: '4A03', arrival_time: '1015', departure_time: '1020', train_status: 'P'},
+                    {uid: 'S45678', headcode: '4A04', arrival_time: '1115', departure_time: '1120', train_status: 'P'},
+                    {uid: 'S56789', headcode: '4A05', arrival_time: '1215', departure_time: '1220', train_status: 'P'}
+                ]
+            },
+            {
+                name: '5',
+                events: [
+                    {uid: 'T12345', headcode: '5A01', arrival_time: '0825', departure_time: '0830', train_status: 'P'},
+                    {uid: 'T23456', headcode: '5A02', arrival_time: '0925', departure_time: '0930', train_status: 'P'},
+                    {uid: 'T34567', headcode: '5A03', arrival_time: '1025', departure_time: '1030', train_status: 'P'},
+                    {uid: 'T45678', headcode: '5A04', arrival_time: '1125', departure_time: '1130', train_status: 'P'},
+                    {uid: 'T56789', headcode: '5A05', arrival_time: '1225', departure_time: '1230', train_status: 'P'}
+                ]
+            }
+        ]
+    };
+    
+    // References to DOM elements
+    const container = document.getElementById('platformDocker');
+    const tooltip = document.getElementById('tooltip');
+    const loadingIndicator = document.getElementById('loadingIndicator');
+    
+    // Zoom controls
+    const zoomInBtn = document.getElementById('zoomIn');
+    const zoomOutBtn = document.getElementById('zoomOut');
+    const resetBtn = document.getElementById('reset');
+    
+    // Time helpers
+    function timeToMinutes(timeStr) {
+        if (!timeStr || timeStr.length !== 4) return null;
+        const hours = parseInt(timeStr.substring(0, 2));
+        const minutes = parseInt(timeStr.substring(2));
+        return (hours * 60) + minutes;
+    }
+    
+    function formatTime(timeStr) {
+        if (!timeStr || timeStr.length !== 4) return timeStr;
+        return `${timeStr.substring(0, 2)}:${timeStr.substring(2)}`;
+    }
+    
+    // Main rendering function
+    function renderPlatformDocker(data) {
+        // Clear container
+        container.innerHTML = '';
+        
+        // Set ultra-wide dimensions for a very detailed view
+        const margin = { top: 50, right: 20, bottom: 20, left: 80 };
+        const viewportWidth = container.clientWidth;
+        const viewportHeight = 600;
+        
+        // Make graph much wider than viewport (each minute = 20px width)
+        const minuteWidth = 20; // 20 pixels per minute
+        const fullDayWidth = 24 * 60 * minuteWidth; // 24 hours * 60 minutes * width per minute
+        
+        // Create scrollable container with fixed height
+        const svgContainer = d3.select(container)
+            .style('height', `${viewportHeight}px`)
+            .style('overflow-x', 'auto')
+            .style('position', 'relative');
+        
+        // Create SVG with the full day width
+        const svg = svgContainer.append('svg')
+            .attr('width', fullDayWidth)
+            .attr('height', viewportHeight)
+            .attr('class', 'platform-svg');
+        
+        // Create chart group with margins
+        const chart = svg.append('g')
+            .attr('class', 'chart-group')
+            .attr('transform', `translate(${margin.left}, ${margin.top})`);
+        
+        // Setup scales
+        const timeScale = d3.scaleLinear()
+            .domain([0, 24 * 60]) // 0:00 to 24:00 in minutes
+            .range([0, fullDayWidth - margin.left - margin.right]);
+        
+        // Sort platforms
+        const platforms = data.platforms.sort((a, b) => {
+            const aNum = parseInt(a.name);
+            const bNum = parseInt(b.name);
+            if (!isNaN(aNum) && !isNaN(bNum)) return aNum - bNum;
+            return a.name.localeCompare(b.name);
+        });
+        
+        // Platform scale
+        const platformHeight = 40;
+        const platformGap = 10;
+        const platformsHeight = platforms.length * (platformHeight + platformGap);
+        
+        // Create time axis with bigger ticks every 30 minutes for better readability
+        const timeAxis = d3.axisTop(timeScale)
+            .tickValues(d3.range(0, 24 * 60 + 1, 30)) // Tick every 30 minutes
+            .tickFormat(d => {
+                const h = Math.floor(d / 60);
+                const m = d % 60;
+                return `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}`;
+            })
+            .tickSize(15); // Make ticks more visible
+        
+        // Add time axis with strong styling
+        const timeAxisGroup = chart.append('g')
+            .attr('class', 'time-axis')
+            .call(timeAxis);
+            
+        // Enhance time axis styling with larger text
+        timeAxisGroup.select('.domain').attr('stroke', '#ffffff').attr('stroke-width', 2);
+        timeAxisGroup.selectAll('.tick line').attr('stroke', '#ffffff').attr('stroke-width', 1.5);
+        timeAxisGroup.selectAll('.tick text')
+            .attr('fill', '#ffffff')
+            .attr('font-size', '14px')
+            .attr('font-weight', 'bold');
+        
+        // Add a fixed non-scrolling time header that stays visible
+        const timeHeader = d3.select(container)
+            .append('div')
+            .style('position', 'fixed')
+            .style('top', '0')
+            .style('left', '0')
+            .style('width', '100%')
+            .style('background-color', 'rgba(30, 33, 36, 0.8)')
+            .style('z-index', '200')
+            .style('border-bottom', '1px solid #ffffff')
+            .style('padding', '5px')
+            .style('text-align', 'center')
+            .style('color', 'white')
+            .style('font-weight', 'bold')
+            .text('Time (Hours:Minutes)');
+        
+        // Add grid lines
+        const gridLines = chart.append('g')
+            .attr('class', 'grid-lines');
+        
+        // Hour grid lines (every 60 minutes) with strong styling
+        gridLines.selectAll('.grid-line-hour')
+            .data(d3.range(0, 25 * 60, 60))
+            .enter()
+            .append('line')
+            .attr('class', 'grid-line-hour')
+            .attr('x1', d => timeScale(d))
+            .attr('x2', d => timeScale(d))
+            .attr('y1', 0)
+            .attr('y2', platformsHeight)
+            .attr('stroke', '#ffffff')
+            .attr('stroke-width', 1)
+            .attr('stroke-dasharray', '3,3');
+        
+        // 5-minute grid lines with stronger styling
+        gridLines.selectAll('.grid-line')
+            .data(d3.range(0, 24 * 60 + 1, 5))
+            .enter()
+            .append('line')
+            .attr('class', 'grid-line')
+            .attr('x1', d => timeScale(d))
+            .attr('x2', d => timeScale(d))
+            .attr('y1', 0)
+            .attr('y2', platformsHeight)
+            .attr('stroke', '#3a3f47')
+            .attr('stroke-width', 0.5)
+            .attr('stroke-dasharray', '2,2');
+        
+        // Current time indicator
+        const now = new Date();
+        const currentMinutes = (now.getHours() * 60) + now.getMinutes();
+        
+        chart.append('line')
+            .attr('class', 'current-time')
+            .attr('x1', timeScale(currentMinutes))
+            .attr('x2', timeScale(currentMinutes))
+            .attr('y1', -10)
+            .attr('y2', platformsHeight)
+            .attr('stroke', '#e74c3c')
+            .attr('stroke-width', 2);
+        
+        // Draw platforms with labels in the graph
+        platforms.forEach((platform, i) => {
+            const y = i * (platformHeight + platformGap);
+            
+            // Platform label with background to make it more visible
+            chart.append('text')
+                .attr('class', 'platform-label')
+                .attr('x', -10)
+                .attr('y', y + platformHeight / 2)
+                .attr('dominant-baseline', 'middle')
+                .text(`Platform ${platform.name}`);
+            
+            // Platform separator
+            chart.append('line')
+                .attr('class', 'platform-separator')
+                .attr('x1', 0)
+                .attr('x2', timeScale(24 * 60))
+                .attr('y1', y + platformHeight + platformGap - 1)
+                .attr('y2', y + platformHeight + platformGap - 1)
+                .attr('stroke', '#3a3f47')
+                .attr('stroke-width', 0.5);
+                
+            // Draw trains
+            if (platform.events && platform.events.length > 0) {
+                platform.events.forEach(train => {
+                    // Convert times to minutes
+                    const arrivalMinutes = timeToMinutes(train.arrival_time);
+                    const departureMinutes = timeToMinutes(train.departure_time);
+                    
+                    if (arrivalMinutes !== null && departureMinutes !== null) {
+                        // Determine color 
+                        let color = '#3498db'; // Default passenger
+                        
+                        // Draw train bar
+                        const trainEl = chart.append('rect')
+                            .attr('class', 'train-event')
+                            .attr('x', timeScale(arrivalMinutes))
+                            .attr('y', y)
+                            .attr('width', timeScale(departureMinutes) - timeScale(arrivalMinutes))
+                            .attr('height', platformHeight)
+                            .attr('fill', color);
+                            
+                        // Add train label if there's enough space
+                        const width = timeScale(departureMinutes) - timeScale(arrivalMinutes);
+                        if (width > 40) {
+                            chart.append('text')
+                                .attr('class', 'train-label')
+                                .attr('x', timeScale(arrivalMinutes) + 5)
+                                .attr('y', y + platformHeight / 2)
+                                .attr('dominant-baseline', 'middle')
+                                .text(train.headcode);
+                        }
+                        
+                        // Add tooltip
+                        trainEl.on('mouseover', function(e) {
+                            d3.select(tooltip)
+                                .style('opacity', 0.9)
+                                .html(`
+                                    <div style="font-weight: bold; margin-bottom: 5px;">
+                                        ${train.headcode} (${train.uid})
+                                    </div>
+                                    <div>Arrival: ${formatTime(train.arrival_time)}</div>
+                                    <div>Departure: ${formatTime(train.departure_time)}</div>
+                                `)
+                                .style('left', `${e.pageX + 10}px`)
+                                .style('top', `${e.pageY - 28}px`);
+                        })
+                        .on('mouseout', function() {
+                            d3.select(tooltip)
+                                .style('opacity', 0);
+                        })
+                        .on('mousemove', function(e) {
+                            d3.select(tooltip)
+                                .style('left', `${e.pageX + 10}px`)
+                                .style('top', `${e.pageY - 28}px`);
+                        });
+                    }
+                });
+            }
+        });
+        
+        // Add zoom behavior
+        const zoom = d3.zoom()
+            .scaleExtent([0.1, 10])
+            .on('zoom', function(event) {
+                chart.attr('transform', `translate(${event.transform.x + margin.left}, ${event.transform.y + margin.top}) scale(${event.transform.k})`);
+                
+                // Update axis with zoom
+                d3.select('.time-axis').call(
+                    timeAxis.scale(event.transform.rescaleX(timeScale))
+                );
+            });
+        
+        svg.call(zoom);
+        
+        // Store zoom control and timeScale in a global variable for the buttons
+        window.platformZoom = {
+            zoom: zoom,
+            svg: svg,
+            timeScale: timeScale
+        };
+        
+        // Initially center on current time
+        const initialTransform = d3.zoomIdentity
+            .translate(-timeScale(currentMinutes) + viewportWidth/2, 0);
+        svg.call(zoom.transform, initialTransform);
+    }
+    
+    // Set up zoom controls
+    zoomInBtn.addEventListener('click', function() {
+        if (window.platformZoom) {
+            window.platformZoom.svg.transition().duration(300)
+                .call(window.platformZoom.zoom.scaleBy, 1.5);
+        }
+    });
+    
+    zoomOutBtn.addEventListener('click', function() {
+        if (window.platformZoom) {
+            window.platformZoom.svg.transition().duration(300)
+                .call(window.platformZoom.zoom.scaleBy, 0.75);
+        }
+    });
+    
+    resetBtn.addEventListener('click', function() {
+        if (window.platformZoom && window.platformZoom.timeScale) {
+            const now = new Date();
+            const currentMinutes = (now.getHours() * 60) + now.getMinutes();
+            const viewportWidth = container.clientWidth;
+            
+            const resetTransform = d3.zoomIdentity
+                .translate(-window.platformZoom.timeScale(currentMinutes) + viewportWidth/2, 0);
+                
+            window.platformZoom.svg.transition().duration(500)
+                .call(window.platformZoom.zoom.transform, resetTransform);
+        }
+    });
+    
+    // Handle form submission
+    document.getElementById('platformForm').addEventListener('submit', function(e) {
+        e.preventDefault();
+        
+        const location = document.getElementById('locationCode').value;
+        const date = document.getElementById('dateSelect').value;
+        
+        // Show loading indicator
+        loadingIndicator.classList.remove('d-none');
+        
+        // Connect to the actual API
+        fetch('/web/platform_docker_data', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                location: location,
+                date: date,
+                page: 1,
+                per_page: 50 // Get more data for a complete view
+            })
+        })
+        .then(response => {
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+            return response.json();
+        })
+        .then(data => {
+            loadingIndicator.classList.add('d-none');
+            renderPlatformDocker(data);
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            alert('Failed to load platform data: ' + error.message);
+            loadingIndicator.classList.add('d-none');
+        });
+    });
+    
+    // Initialize with mock data
+    renderPlatformDocker(mockData);
+});
+</script>
+{% endblock %}

@@ -1,0 +1,142 @@
+
+{% extends 'base.html' %}
+
+{% block title %}UK Railway CIF Reader{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="jumbotron bg-light p-5 rounded shadow-sm">
+        <h1 class="display-4">UK Railway CIF Reader</h1>
+        <p class="lead">A comprehensive platform for processing and visualizing UK railway schedule data</p>
+        <hr class="my-4">
+        <p>Access powerful tools for analyzing train schedules, visualizing timetables, and exploring rail network data</p>
+    </div>
+    
+    <div class="row mt-4">
+        <div class="col-md-6">
+            <div class="card mb-4 shadow-sm">
+                <div class="card-header bg-primary text-white">
+                    <h2 class="h5 mb-0"><i class="bi bi-train-front"></i> Schedule Analysis</h2>
+                </div>
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center mb-3">
+                        <h3 class="h6">Search Train Schedules</h3>
+                        <i class="bi bi-search fs-5 text-primary"></i>
+                    </div>
+                    <p class="small text-muted mb-3">Find specific train services by location, date, and other criteria</p>
+                    
+                    <form action="{{ url_for('web.schedules') }}" method="get" class="mb-4">
+                        <div class="row g-2">
+                            <div class="col-md-6">
+                                <label for="location" class="form-label">Location (TIPLOC)</label>
+                                <select name="location" id="location" class="form-select" required>
+                                    {% for station in stations %}
+                                    <option value="{{ station.code }}">{{ station.name }} ({{ station.code }})</option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                            <div class="col-md-6">
+                                <label for="date" class="form-label">Date</label>
+                                <input type="date" class="form-control" id="date" name="date" value="{{ today }}" required>
+                            </div>
+                            <div class="col-12 mt-2">
+                                <button type="submit" class="btn btn-primary btn-sm w-100">
+                                    <i class="bi bi-search"></i> View Schedules
+                                </button>
+                            </div>
+                        </div>
+                    </form>
+                    
+                    <div class="d-flex justify-content-between align-items-center mb-3">
+                        <h3 class="h6">Quick Links</h3>
+                        <i class="bi bi-lightning-fill fs-5 text-warning"></i>
+                    </div>
+                    <div class="list-group">
+                        <a href="{{ url_for('web.schedules') }}?location=CHRX&date={{ today }}" class="list-group-item list-group-item-action d-flex justify-content-between align-items-center">
+                            <span><i class="bi bi-list-ul"></i> Charing Cross Schedules</span>
+                            <span class="badge bg-primary rounded-pill">Today</span>
+                        </a>
+                        <a href="{{ url_for('web.schedules') }}?location=WLOE&date={{ today }}" class="list-group-item list-group-item-action d-flex justify-content-between align-items-center">
+                            <span><i class="bi bi-list-ul"></i> Waterloo East Schedules</span>
+                            <span class="badge bg-primary rounded-pill">Today</span>
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-md-6">
+            <div class="card mb-4 shadow-sm">
+                <div class="card-header bg-info text-white">
+                    <h2 class="h5 mb-0"><i class="bi bi-graph-up"></i> Visualizations</h2>
+                </div>
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center mb-3">
+                        <h3 class="h6">Platform Docker</h3>
+                        <i class="bi bi-clock-history fs-5 text-info"></i>
+                    </div>
+                    <p class="small text-muted mb-3">Track train movements by platform throughout the day</p>
+                    <div class="list-group mb-4">
+                        <a href="{{ url_for('web.platform_docker') }}" class="list-group-item list-group-item-action d-flex justify-content-between align-items-center">
+                            <span><i class="bi bi-clock"></i> Platform Docker Visualization</span>
+                            <span class="badge bg-info rounded-pill">View</span>
+                        </a>
+                    </div>
+                    
+                    <div class="d-flex justify-content-between align-items-center mb-3">
+                        <h3 class="h6">Train Graph</h3>
+                        <i class="bi bi-bar-chart-line fs-5 text-info"></i>
+                    </div>
+                    <p class="small text-muted mb-3">Visualize train movements on a time vs. location graph</p>
+                    <div class="list-group">
+                        <a href="{{ url_for('web.train_graph_view') }}" class="list-group-item list-group-item-action d-flex justify-content-between align-items-center">
+                            <span><i class="bi bi-graph-up"></i> Train Graph Viewer</span>
+                            <span class="badge bg-info rounded-pill">View</span>
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="row">
+        <div class="col-md-12">
+            <div class="card mb-4 shadow-sm">
+                <div class="card-header bg-secondary text-white">
+                    <h2 class="h5 mb-0"><i class="bi bi-gear"></i> System Management</h2>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="d-flex justify-content-between align-items-center mb-3">
+                                <h3 class="h6">System Status</h3>
+                                <i class="bi bi-info-circle fs-5 text-secondary"></i>
+                            </div>
+                            <p class="small text-muted mb-3">Check current database and system status</p>
+                            <div class="list-group">
+                                <a href="{{ url_for('web.debug_database') }}" class="list-group-item list-group-item-action d-flex justify-content-between align-items-center">
+                                    <span><i class="bi bi-database"></i> Database Status</span>
+                                    <span class="badge bg-secondary rounded-pill">Check</span>
+                                </a>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="d-flex justify-content-between align-items-center mb-3">
+                                <h3 class="h6">Administration</h3>
+                                <i class="bi bi-shield-lock fs-5 text-warning"></i>
+                            </div>
+                            <p class="small text-muted mb-3">Database maintenance and system administration</p>
+                            <div class="list-group">
+                                <a href="{{ url_for('web.maintenance') }}" class="list-group-item list-group-item-action d-flex justify-content-between align-items-center">
+                                    <span><i class="bi bi-gear"></i> Maintenance Panel</span>
+                                    <span class="badge bg-warning rounded-pill">Admin</span>
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

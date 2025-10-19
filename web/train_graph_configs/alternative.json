@@ -1,0 +1,17 @@
+{
+  "name": "East-West London Route",
+  "locations": ["STFD", "STFD", "LVRPLST", "EUSTON"],
+  "direction": "up",
+  "display_names": {
+    "EUSTON": "London Euston",
+    "LVRPLST": "Liverpool Street",
+    "STFD": "Stratford Low Level"
+  },
+  "filters": [
+    {
+      "location": "LVRPLST",
+      "platform": "10"
+    }
+  ],
+  "filter_mode": "match_all"
+}

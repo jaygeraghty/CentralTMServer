@@ -1,0 +1,52 @@
+version: '3'
+
+services:
+  # Main API service
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    environment:
+      - DATABASE_URL=${DATABASE_URL}
+    ports:
+      - "5000:5000"
+    command: gunicorn --bind 0.0.0.0:5000 --reuse-port --reload main:app
+    volumes:
+      - ./import:/app/import
+      - ./archive:/app/archive
+    networks:
+      - rail_network
+
+  # Location-specific container example (CHRX - Charing Cross)
+  chrx:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    environment:
+      - API_SERVER_URL=http://api:5000
+      - LOCATION=CHRX
+    ports:
+      - "5001:5001"
+    depends_on:
+      - api
+    networks:
+      - rail_network
+
+  # Another location example (WLOE - Waterloo East)
+  wloe:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    environment:
+      - API_SERVER_URL=http://api:5000
+      - LOCATION=WLOE
+    ports:
+      - "5002:5001"
+    depends_on:
+      - api
+    networks:
+      - rail_network
+
+networks:
+  rail_network:
+    driver: bridge

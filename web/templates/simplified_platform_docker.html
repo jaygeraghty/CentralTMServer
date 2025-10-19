@@ -1,0 +1,193 @@
+{% extends "base.html" %}
+
+{% block title %}Platform Docker{% endblock %}
+
+{% block head %}
+{{ super() }}
+<style>
+.platform-container {
+    margin-bottom: 2rem;
+}
+.platform-header {
+    background-color: #343a40;
+    color: white;
+    padding: 0.5rem 1rem;
+    border-radius: 0.25rem 0.25rem 0 0;
+}
+.platform-events {
+    border: 1px solid #dee2e6;
+    border-top: none;
+    border-radius: 0 0 0.25rem 0.25rem;
+    padding: 1rem;
+}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid mt-4">
+    <div class="row">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header">
+                    <h2>Platform Docker Visualization</h2>
+                    <p class="mb-0">View train movements at a specific location by platform</p>
+                </div>
+                <div class="card-body">
+                    <form id="platformDockerForm" class="row g-3">
+                        <div class="col-md-4">
+                            <label for="locationCode" class="form-label">Location Code (TIPLOC)</label>
+                            <input type="text" class="form-control" id="locationCode" name="location" value="CHRX" required>
+                            <div class="form-text">Common locations: CHRX, WLOE</div>
+                        </div>
+                        <div class="col-md-4">
+                            <label for="dockerDate" class="form-label">Date</label>
+                            <input type="date" class="form-control" id="dockerDate" name="date" required>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">&nbsp;</label>
+                            <button type="submit" class="btn btn-primary form-control">Load Platforms</button>
+                        </div>
+                    </form>
+
+                    <div id="loadingIndicator" class="text-center my-5 d-none">
+                        <div class="spinner-border text-primary" role="status">
+                            <span class="visually-hidden">Loading...</span>
+                        </div>
+                        <p class="mt-2">Loading platform data...</p>
+                    </div>
+
+                    <div id="resultsContainer" class="mt-4">
+                        <!-- Results will be loaded here -->
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const form = document.getElementById('platformDockerForm');
+    const resultsContainer = document.getElementById('resultsContainer');
+    const loadingIndicator = document.getElementById('loadingIndicator');
+    
+    // Set default date to today
+    document.getElementById('dockerDate').valueAsDate = new Date();
+
+    form.addEventListener('submit', async function(e) {
+        e.preventDefault();
+        
+        const location = document.getElementById('locationCode').value;
+        const date = document.getElementById('dockerDate').value;
+        
+        // Show loading indicator
+        loadingIndicator.classList.remove('d-none');
+        resultsContainer.innerHTML = '';
+        
+        try {
+            const response = await fetch('/web/simple_platform_data', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    location: location,
+                    date: date
+                })
+            });
+            
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+            
+            const data = await response.json();
+            console.log('Platform data:', data);
+            
+            // Hide loading indicator
+            loadingIndicator.classList.add('d-none');
+            
+            if (data.error) {
+                resultsContainer.innerHTML = `<div class="alert alert-danger">${data.error}</div>`;
+                return;
+            }
+            
+            if (data.platforms && data.platforms.length > 0) {
+                renderPlatforms(data.platforms);
+            } else {
+                resultsContainer.innerHTML = `<div class="alert alert-info">No platform data found for ${location} on ${date}</div>`;
+            }
+        } catch (error) {
+            console.error('Error:', error);
+            loadingIndicator.classList.add('d-none');
+            resultsContainer.innerHTML = `<div class="alert alert-danger">Failed to load platform data: ${error.message}</div>`;
+        }
+    });
+    
+    function renderPlatforms(platforms) {
+        let html = '';
+        
+        platforms.forEach(platform => {
+            html += `
+                <div class="platform-container">
+                    <div class="platform-header">
+                        <h3 class="m-0">Platform ${platform.platform}</h3>
+                    </div>
+                    <div class="platform-events">
+                        <table class="table table-striped">
+                            <thead>
+                                <tr>
+                                    <th>Train</th>
+                                    <th>Arrival</th>
+                                    <th>Departure</th>
+                                    <th>Details</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+            `;
+            
+            if (platform.trains && platform.trains.length > 0) {
+                platform.trains.forEach(train => {
+                    const arrivalTime = train.arrival_time ? formatTime(train.arrival_time) : '-';
+                    const departureTime = train.departure_time ? formatTime(train.departure_time) : '-';
+                    
+                    html += `
+                        <tr>
+                            <td>
+                                <strong>${train.headcode || 'N/A'}</strong>
+                                <small class="d-block text-muted">${train.uid}</small>
+                            </td>
+                            <td>${arrivalTime}</td>
+                            <td>${departureTime}</td>
+                            <td>
+                                <span class="badge bg-primary">${train.category || 'N/A'}</span>
+                                <small class="d-block text-muted">${train.origin || ''} → ${train.destination || ''}</small>
+                            </td>
+                        </tr>
+                    `;
+                });
+            } else {
+                html += `
+                    <tr>
+                        <td colspan="4" class="text-center">No trains scheduled for this platform</td>
+                    </tr>
+                `;
+            }
+            
+            html += `
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            `;
+        });
+        
+        resultsContainer.innerHTML = html;
+    }
+    
+    function formatTime(time) {
+        if (!time || time.length !== 4) return time;
+        return time.substring(0, 2) + ':' + time.substring(2, 4);
+    }
+});
+</script>
+{% endblock %}

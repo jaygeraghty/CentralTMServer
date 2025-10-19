@@ -1,0 +1,14 @@
+#!/bin/bash
+# Run STP indicator tests
+# This script runs just the STP indicator-related tests which are the most relevant for our project
+
+echo "Running STP indicator tests..."
+echo "============================"
+
+echo "1. Testing STP indicator API functionality"
+python -m unittest tests/test_stp_indicators_api.py
+
+echo -e "\n2. Testing STP main functionality"
+python -m unittest tests/test_stp_main.py
+
+echo -e "\nSTP indicator tests completed!"

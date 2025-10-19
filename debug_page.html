@@ -1,0 +1,405 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Train Debug Interface</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background-color: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .section {
+            margin-bottom: 30px;
+            padding: 20px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            background-color: #fafafa;
+        }
+        .section h2 {
+            margin-top: 0;
+            color: #333;
+            border-bottom: 2px solid #007cba;
+            padding-bottom: 10px;
+        }
+        .form-group {
+            margin-bottom: 15px;
+        }
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+            color: #555;
+        }
+        input, select, textarea {
+            width: 100%;
+            padding: 8px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            font-size: 14px;
+        }
+        textarea {
+            height: 100px;
+            resize: vertical;
+        }
+        button {
+            background-color: #007cba;
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+            margin-right: 10px;
+        }
+        button:hover {
+            background-color: #005a8b;
+        }
+        .danger-btn {
+            background-color: #dc3545;
+        }
+        .danger-btn:hover {
+            background-color: #c82333;
+        }
+        .response {
+            margin-top: 20px;
+            padding: 15px;
+            border-radius: 4px;
+            white-space: pre-wrap;
+            font-family: monospace;
+            font-size: 12px;
+        }
+        .success {
+            background-color: #d4edda;
+            border: 1px solid #c3e6cb;
+            color: #155724;
+        }
+        .error {
+            background-color: #f8d7da;
+            border: 1px solid #f5c6cb;
+            color: #721c24;
+        }
+        .train-select {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px;
+        }
+        @media (max-width: 768px) {
+            .train-select {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Train Debug Interface</h1>
+        <p>Use this interface to send test forecast updates and actual movement messages to the active trains system.</p>
+        
+        <!-- Train Selection -->
+        <div class="section">
+            <h2>Train Selection</h2>
+            <div class="train-select">
+                <div class="form-group">
+                    <label for="trainList">Select Train:</label>
+                    <select id="trainList" onchange="loadTrainInfo()">
+                        <option value="">Loading trains...</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="trainInfo">Train Information:</label>
+                    <textarea id="trainInfo" readonly placeholder="Select a train to see its details"></textarea>
+                </div>
+            </div>
+        </div>
+
+        <!-- Forecast Update -->
+        <div class="section">
+            <h2>Forecast Update</h2>
+            <form id="forecastForm">
+                <div class="form-group">
+                    <label for="forecastUid">Train UID:</label>
+                    <input type="text" id="forecastUid" placeholder="e.g. P12345" required>
+                </div>
+                
+                <div class="form-group">
+                    <label for="forecastTiploc">Location (TIPLOC):</label>
+                    <input type="text" id="forecastTiploc" placeholder="e.g. CHRX" required>
+                </div>
+                
+                <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 15px;">
+                    <div class="form-group">
+                        <label for="forecastArrival">Forecast Arrival (HH:MM):</label>
+                        <input type="time" id="forecastArrival">
+                    </div>
+                    <div class="form-group">
+                        <label for="forecastDeparture">Forecast Departure (HH:MM):</label>
+                        <input type="time" id="forecastDeparture">
+                    </div>
+                    <div class="form-group">
+                        <label for="forecastPass">Forecast Pass (HH:MM):</label>
+                        <input type="time" id="forecastPass">
+                    </div>
+                </div>
+                
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
+                    <div class="form-group">
+                        <label for="delayMinutes">Delay (minutes):</label>
+                        <input type="number" id="delayMinutes" min="0" placeholder="e.g. 5">
+                    </div>
+                    <div class="form-group">
+                        <label for="forecastPlatform">Platform:</label>
+                        <input type="text" id="forecastPlatform" placeholder="e.g. 1A">
+                    </div>
+                </div>
+                
+                <button type="submit">Send Forecast Update</button>
+            </form>
+            <div id="forecastResponse"></div>
+        </div>
+
+        <!-- Realtime/Actual Update -->
+        <div class="section">
+            <h2>Realtime/Actual Update</h2>
+            <form id="realtimeForm">
+                <div class="form-group">
+                    <label for="realtimeHeadcode">Train Headcode:</label>
+                    <input type="text" id="realtimeHeadcode" placeholder="e.g. 1A23" required>
+                </div>
+                
+                <div class="form-group">
+                    <label for="realtimeTiploc">Location (TIPLOC):</label>
+                    <input type="text" id="realtimeTiploc" placeholder="e.g. CHRX" required>
+                </div>
+                
+                <div class="form-group">
+                    <label for="eventType">Event Type:</label>
+                    <select id="eventType" required>
+                        <option value="">Select event type</option>
+                        <option value="arrival">Arrival</option>
+                        <option value="departure">Departure</option>
+                        <option value="pass">Pass</option>
+                        <option value="step">Step (Berth Movement)</option>
+                    </select>
+                </div>
+                
+                <div class="form-group">
+                    <label for="actualTime">Actual Time (HH:MM:SS):</label>
+                    <input type="time" id="actualTime" step="1" required>
+                </div>
+                
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
+                    <div class="form-group">
+                        <label for="fromBerth">From Berth (for step events):</label>
+                        <input type="text" id="fromBerth" placeholder="e.g. 0123">
+                    </div>
+                    <div class="form-group">
+                        <label for="toBerth">To Berth (for step events):</label>
+                        <input type="text" id="toBerth" placeholder="e.g. 0124">
+                    </div>
+                </div>
+                
+                <div class="form-group">
+                    <label for="actualPlatform">Platform:</label>
+                    <input type="text" id="actualPlatform" placeholder="e.g. 1A">
+                </div>
+                
+                <button type="submit">Send Realtime Update</button>
+            </form>
+            <div id="realtimeResponse"></div>
+        </div>
+
+        <!-- Quick Actions -->
+        <div class="section">
+            <h2>Quick Actions</h2>
+            <button onclick="refreshTrainList()">Refresh Train List</button>
+            <button onclick="checkSystemStatus()">Check System Status</button>
+            <button onclick="testRailwayRollover()" class="danger-btn">Test Railway Rollover (Use with caution)</button>
+            <div id="quickActionsResponse"></div>
+        </div>
+    </div>
+
+    <script>
+        let trains = [];
+
+        // Load trains on page load
+        document.addEventListener('DOMContentLoaded', function() {
+            refreshTrainList();
+        });
+
+        async function refreshTrainList() {
+            try {
+                const response = await fetch('/api/trains/list');
+                trains = await response.json();
+                
+                const trainList = document.getElementById('trainList');
+                trainList.innerHTML = '<option value="">Select a train...</option>';
+                
+                trains.forEach(train => {
+                    const option = document.createElement('option');
+                    option.value = train.uid;
+                    option.textContent = `${train.headcode} (${train.uid})`;
+                    trainList.appendChild(option);
+                });
+                
+                showResponse('quickActionsResponse', `Loaded ${trains.length} trains`, 'success');
+            } catch (error) {
+                showResponse('quickActionsResponse', `Error loading trains: ${error.message}`, 'error');
+            }
+        }
+
+        function loadTrainInfo() {
+            const selectedUid = document.getElementById('trainList').value;
+            const train = trains.find(t => t.uid === selectedUid);
+            
+            if (train) {
+                // Auto-fill forecast form
+                document.getElementById('forecastUid').value = train.uid;
+                document.getElementById('realtimeHeadcode').value = train.headcode;
+                
+                // Show train info
+                const info = `Headcode: ${train.headcode}
+UID: ${train.uid}
+Detected: ${train.detected}
+Current Location: ${train.last_location || 'Unknown'}
+Current Berth: ${train.berth || 'None'}
+Delay: ${train.delay || 0} minutes
+Status: ${train.terminated ? 'Terminated' : train.cancelled ? 'Cancelled' : 'Active'}
+
+Schedule Locations: ${train.schedule ? train.schedule.locations.length : 0}`;
+                
+                document.getElementById('trainInfo').value = info;
+                
+                // Auto-fill first location
+                if (train.schedule && train.schedule.locations.length > 0) {
+                    const firstLoc = train.schedule.locations[0];
+                    document.getElementById('forecastTiploc').value = firstLoc.tiploc;
+                    document.getElementById('realtimeTiploc').value = firstLoc.tiploc;
+                }
+            }
+        }
+
+        // Forecast form submission
+        document.getElementById('forecastForm').addEventListener('submit', async function(e) {
+            e.preventDefault();
+            
+            const payload = {
+                uid: document.getElementById('forecastUid').value,
+                forecasts: [{
+                    tiploc: document.getElementById('forecastTiploc').value,
+                    forecast_arrival: document.getElementById('forecastArrival').value || null,
+                    forecast_departure: document.getElementById('forecastDeparture').value || null,
+                    forecast_pass: document.getElementById('forecastPass').value || null,
+                    delay_minutes: parseInt(document.getElementById('delayMinutes').value) || null,
+                    platform: document.getElementById('forecastPlatform').value || null
+                }]
+            };
+            
+            // Remove null values
+            Object.keys(payload.forecasts[0]).forEach(key => {
+                if (payload.forecasts[0][key] === null || payload.forecasts[0][key] === '') {
+                    delete payload.forecasts[0][key];
+                }
+            });
+            
+            try {
+                const response = await fetch('/api/trains/forecast_update', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify(payload)
+                });
+                
+                const result = await response.text();
+                showResponse('forecastResponse', `Response: ${result}`, response.ok ? 'success' : 'error');
+            } catch (error) {
+                showResponse('forecastResponse', `Error: ${error.message}`, 'error');
+            }
+        });
+
+        // Realtime form submission
+        document.getElementById('realtimeForm').addEventListener('submit', async function(e) {
+            e.preventDefault();
+            
+            const payload = {
+                headcode: document.getElementById('realtimeHeadcode').value,
+                tiploc: document.getElementById('realtimeTiploc').value,
+                event_type: document.getElementById('eventType').value,
+                timestamp: new Date().toISOString(), // Current timestamp
+                actual_time: document.getElementById('actualTime').value,
+                platform: document.getElementById('actualPlatform').value || null
+            };
+            
+            // Add berth info for step events
+            if (payload.event_type === 'step') {
+                payload.from_berth = document.getElementById('fromBerth').value;
+                payload.to_berth = document.getElementById('toBerth').value;
+            }
+            
+            // Remove null values
+            Object.keys(payload).forEach(key => {
+                if (payload[key] === null || payload[key] === '') {
+                    delete payload[key];
+                }
+            });
+            
+            try {
+                const response = await fetch('/api/trains/realtime_update', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify(payload)
+                });
+                
+                const result = await response.text();
+                showResponse('realtimeResponse', `Response: ${result}`, response.ok ? 'success' : 'error');
+            } catch (error) {
+                showResponse('realtimeResponse', `Error: ${error.message}`, 'error');
+            }
+        });
+
+        async function checkSystemStatus() {
+            try {
+                const response = await fetch('/api/trains/status');
+                const result = await response.json();
+                showResponse('quickActionsResponse', JSON.stringify(result, null, 2), 'success');
+            } catch (error) {
+                showResponse('quickActionsResponse', `Error: ${error.message}`, 'error');
+            }
+        }
+
+        async function testRailwayRollover() {
+            if (!confirm('This will test the railway day rollover process. Are you sure?')) {
+                return;
+            }
+            
+            try {
+                const response = await fetch('/api/test_railway_rollover', {
+                    method: 'POST'
+                });
+                const result = await response.json();
+                showResponse('quickActionsResponse', JSON.stringify(result, null, 2), 'success');
+            } catch (error) {
+                showResponse('quickActionsResponse', `Error: ${error.message}`, 'error');
+            }
+        }
+
+        function showResponse(elementId, message, type) {
+            const element = document.getElementById(elementId);
+            element.innerHTML = message;
+            element.className = `response ${type}`;
+        }
+    </script>
+</body>
+</html>

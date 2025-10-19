@@ -1,0 +1,728 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Train Graph Demo</title>
+    <link href="https://cdn.replit.com/agent/bootstrap-agent-dark-theme.min.css" rel="stylesheet">
+    <style>
+        /* Train Graph Viewer Styles */
+        body {
+            background-color: #212529;
+            color: #f8f9fa;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        
+        .card {
+            background-color: #343a40;
+            border-radius: 0.25rem;
+            margin-bottom: 20px;
+            box-shadow: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.075);
+        }
+        
+        .card-header {
+            background-color: #3c4349;
+            padding: 15px;
+            border-bottom: 1px solid #495057;
+            border-radius: 0.25rem 0.25rem 0 0;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .card-body {
+            padding: 15px;
+        }
+        
+        #train-graph-container {
+            position: relative;
+            width: 100%;
+            height: 600px;
+            background-color: #272b30;
+            border-radius: 0.25rem;
+            overflow: hidden;
+        }
+        
+        #train-graph {
+            width: 100%;
+            height: 100%;
+        }
+        
+        .axis path,
+        .axis line {
+            stroke: #495057;
+            shape-rendering: crispEdges;
+        }
+        
+        .axis text {
+            fill: #adb5bd;
+            font-size: 10px;
+        }
+        
+        .grid line {
+            stroke: #495057;
+            stroke-opacity: 0.2;
+            shape-rendering: crispEdges;
+        }
+        
+        .grid path {
+            stroke-width: 0;
+        }
+        
+        .train-line {
+            stroke-width: 2;
+            fill: none;
+            transition: stroke-width 0.2s;
+        }
+        
+        .train-line.passenger {
+            stroke: #0d6efd;
+        }
+        
+        .train-line.freight {
+            stroke: #fd7e14;
+        }
+        
+        .train-line.ecs {
+            stroke: #6c757d;
+            stroke-dasharray: 4, 2;
+        }
+        
+        .train-line:hover {
+            stroke-width: 3;
+            cursor: pointer;
+        }
+        
+        .tooltip-container {
+            position: absolute;
+            display: none;
+            pointer-events: none;
+            background-color: rgba(33, 37, 41, 0.95);
+            color: #fff;
+            padding: 10px;
+            border-radius: 4px;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
+            z-index: 1000;
+        }
+        
+        .tooltip-title {
+            margin: 0 0 5px 0;
+            font-size: 16px;
+            border-bottom: 1px solid #495057;
+            padding-bottom: 5px;
+        }
+        
+        .btn {
+            padding: 0.375rem 0.75rem;
+            font-size: 1rem;
+            border-radius: 0.25rem;
+            cursor: pointer;
+        }
+        
+        .btn-primary {
+            background-color: #0d6efd;
+            border-color: #0d6efd;
+            color: #fff;
+        }
+        
+        .btn-primary:hover {
+            background-color: #0b5ed7;
+            border-color: #0a58ca;
+        }
+        
+        .form-group {
+            margin-bottom: 1rem;
+        }
+        
+        .form-control {
+            display: block;
+            width: 100%;
+            padding: 0.375rem 0.75rem;
+            font-size: 1rem;
+            line-height: 1.5;
+            color: #495057;
+            background-color: #fff;
+            border: 1px solid #ced4da;
+            border-radius: 0.25rem;
+        }
+        
+        .row {
+            display: flex;
+            flex-wrap: wrap;
+            margin-right: -15px;
+            margin-left: -15px;
+        }
+        
+        .col-md-4, .col-md-8 {
+            position: relative;
+            width: 100%;
+            padding-right: 15px;
+            padding-left: 15px;
+        }
+        
+        @media (min-width: 768px) {
+            .col-md-4 {
+                flex: 0 0 33.333333%;
+                max-width: 33.333333%;
+            }
+            .col-md-8 {
+                flex: 0 0 66.666667%;
+                max-width: 66.666667%;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header class="mb-4">
+            <h1>Train Graph Viewer</h1>
+            <p>Visualize train movements between stations</p>
+        </header>
+        
+        <div class="card mb-4">
+            <div class="card-header">
+                <h2 style="margin: 0; font-size: 1.25rem;">Configuration</h2>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-4">
+                        <div class="form-group">
+                            <label for="date-picker">Date</label>
+                            <input type="date" id="date-picker" class="form-control">
+                        </div>
+                    </div>
+                    <div class="col-md-8">
+                        <div class="form-group">
+                            <label for="location-select">Locations</label>
+                            <select id="location-select" class="form-control">
+                                <option value="CHRX,WLOE">Charing Cross - Waterloo East</option>
+                                <option value="CHRX,WLOE,LNDNBDE">Charing Cross - Waterloo East - London Bridge</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label>Display Options</label>
+                    <div style="display: flex; flex-wrap: wrap; margin-top: 10px;">
+                        <div style="margin-right: 15px; margin-bottom: 10px;">
+                            <input type="checkbox" id="show-passenger" checked>
+                            <label for="show-passenger">Passenger Trains</label>
+                        </div>
+                        <div style="margin-right: 15px; margin-bottom: 10px;">
+                            <input type="checkbox" id="show-freight" checked>
+                            <label for="show-freight">Freight Trains</label>
+                        </div>
+                        <div style="margin-right: 15px; margin-bottom: 10px;">
+                            <input type="checkbox" id="show-ecs" checked>
+                            <label for="show-ecs">Empty Coaching Stock</label>
+                        </div>
+                    </div>
+                </div>
+                <div style="margin-top: 10px;">
+                    <button id="generate-graph" class="btn btn-primary">Generate Graph</button>
+                </div>
+            </div>
+        </div>
+        
+        <div class="card">
+            <div class="card-header">
+                <h2 style="margin: 0; font-size: 1.25rem;">Train Graph</h2>
+            </div>
+            <div class="card-body" style="padding: 0;">
+                <div id="train-graph-container">
+                    <div id="train-graph"></div>
+                </div>
+            </div>
+        </div>
+        
+        <div id="tooltip" class="tooltip-container">
+            <h3 class="tooltip-title"></h3>
+            <div class="tooltip-content"></div>
+        </div>
+    </div>
+    
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <script>
+        // Set default date to today
+        document.getElementById('date-picker').valueAsDate = new Date();
+        
+        // Sample train data
+        const generateSampleData = (locations) => {
+            const trains = [];
+            const locationArray = locations.split(',');
+            
+            // Generate passenger trains (every 15 minutes)
+            for (let hour = 7; hour <= 22; hour++) {
+                for (let minute = 0; minute < 60; minute += 15) {
+                    const timeStr = `${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}`;
+                    const trainId = `1P${hour}${minute}`;
+                    
+                    const train = {
+                        uid: `P${Math.random().toString(36).substr(2, 6)}`,
+                        train_identity: trainId,
+                        train_category: 'O',
+                        locations: []
+                    };
+                    
+                    // Generate schedule for this train through all locations
+                    let currentTime = hour * 60 + minute;
+                    locationArray.forEach((location, index) => {
+                        // Add 5 minutes between each location
+                        const arrTime = index > 0 ? `${Math.floor((currentTime + 5 * index) / 60).toString().padStart(2, '0')}:${((currentTime + 5 * index) % 60).toString().padStart(2, '0')}` : null;
+                        const depTime = `${Math.floor((currentTime + 2 + 5 * index) / 60).toString().padStart(2, '0')}:${((currentTime + 2 + 5 * index) % 60).toString().padStart(2, '0')}`;
+                        
+                        train.locations.push({
+                            sequence: index + 1,
+                            tiploc: location,
+                            location_type: index === 0 ? 'LO' : index === locationArray.length - 1 ? 'LT' : 'LI',
+                            arr: arrTime,
+                            dep: depTime,
+                            platform: `${index + 1}`
+                        });
+                    });
+                    
+                    trains.push(train);
+                }
+            }
+            
+            // Generate a few freight trains
+            for (let hour = 8; hour <= 20; hour += 3) {
+                const timeStr = `${hour.toString().padStart(2, '0')}:30`;
+                const trainId = `6F${hour}30`;
+                
+                const train = {
+                    uid: `F${Math.random().toString(36).substr(2, 6)}`,
+                    train_identity: trainId,
+                    train_category: 'J',
+                    locations: []
+                };
+                
+                // Generate schedule for this freight train
+                let currentTime = hour * 60 + 30;
+                locationArray.forEach((location, index) => {
+                    // Add 8 minutes between each location (slower than passenger)
+                    const arrTime = index > 0 ? `${Math.floor((currentTime + 8 * index) / 60).toString().padStart(2, '0')}:${((currentTime + 8 * index) % 60).toString().padStart(2, '0')}` : null;
+                    const depTime = `${Math.floor((currentTime + 5 + 8 * index) / 60).toString().padStart(2, '0')}:${((currentTime + 5 + 8 * index) % 60).toString().padStart(2, '0')}`;
+                    
+                    train.locations.push({
+                        sequence: index + 1,
+                        tiploc: location,
+                        location_type: index === 0 ? 'LO' : index === locationArray.length - 1 ? 'LT' : 'LI',
+                        arr: arrTime,
+                        dep: depTime,
+                        platform: `${index + 1}`
+                    });
+                });
+                
+                trains.push(train);
+            }
+            
+            // Generate a few ECS trains
+            for (let hour = 6; hour <= 23; hour += 4) {
+                const timeStr = `${hour.toString().padStart(2, '0')}:45`;
+                const trainId = `5Z${hour}45`;
+                
+                const train = {
+                    uid: `Z${Math.random().toString(36).substr(2, 6)}`,
+                    train_identity: trainId,
+                    train_category: 'Z',
+                    locations: []
+                };
+                
+                // Generate schedule for this ECS train
+                let currentTime = hour * 60 + 45;
+                locationArray.forEach((location, index) => {
+                    // Add 6 minutes between each location
+                    const arrTime = index > 0 ? `${Math.floor((currentTime + 6 * index) / 60).toString().padStart(2, '0')}:${((currentTime + 6 * index) % 60).toString().padStart(2, '0')}` : null;
+                    const depTime = `${Math.floor((currentTime + 3 + 6 * index) / 60).toString().padStart(2, '0')}:${((currentTime + 3 + 6 * index) % 60).toString().padStart(2, '0')}`;
+                    
+                    train.locations.push({
+                        sequence: index + 1,
+                        tiploc: location,
+                        location_type: index === 0 ? 'LO' : index === locationArray.length - 1 ? 'LT' : 'LI',
+                        arr: arrTime,
+                        dep: depTime,
+                        platform: `${index + 1}`
+                    });
+                });
+                
+                trains.push(train);
+            }
+            
+            return trains;
+        };
+        
+        // Train Graph class
+        class TrainGraph {
+            constructor(container, trains, locations) {
+                this.container = container;
+                this.trains = trains;
+                this.locations = locations.split(',');
+                this.svg = null;
+                this.width = container.clientWidth;
+                this.height = container.clientHeight;
+                this.padding = { top: 40, right: 30, bottom: 50, left: 100 };
+                this.tooltip = document.getElementById('tooltip');
+                
+                // Display settings
+                this.showPassenger = document.getElementById('show-passenger').checked;
+                this.showFreight = document.getElementById('show-freight').checked;
+                this.showECS = document.getElementById('show-ecs').checked;
+                
+                // Setup and render
+                this.setupScales();
+                this.render();
+            }
+            
+            setupScales() {
+                // Location scale (Y-axis)
+                this.locationScale = d3.scalePoint()
+                    .domain(this.locations)
+                    .range([this.padding.top, this.height - this.padding.bottom])
+                    .padding(0.5);
+                
+                // Time scale (X-axis)
+                const timeRange = [0, 24 * 60]; // Minutes in a day
+                this.timeScale = d3.scaleLinear()
+                    .domain(timeRange)
+                    .range([this.padding.left, this.width - this.padding.right]);
+            }
+            
+            timeToMinutes(timeStr) {
+                if (!timeStr) return null;
+                const [hours, minutes] = timeStr.split(':').map(Number);
+                return hours * 60 + minutes;
+            }
+            
+            timeToX(timeStr) {
+                const minutes = this.timeToMinutes(timeStr);
+                if (minutes === null) return null;
+                return this.timeScale(minutes);
+            }
+            
+            locationToY(tiploc) {
+                return this.locationScale(tiploc);
+            }
+            
+            createTrainPath(train) {
+                const locations = train.locations.filter(loc => 
+                    this.locations.includes(loc.tiploc)
+                ).sort((a, b) => a.sequence - b.sequence);
+                
+                if (locations.length < 2) return ''; // Need at least 2 points
+                
+                const points = [];
+                
+                for (const loc of locations) {
+                    const y = this.locationToY(loc.tiploc);
+                    
+                    // Arrival point (if available)
+                    if (loc.arr) {
+                        const x = this.timeToX(loc.arr);
+                        if (x !== null) points.push({ x, y });
+                    }
+                    
+                    // Departure point (if available)
+                    if (loc.dep) {
+                        const x = this.timeToX(loc.dep);
+                        if (x !== null) points.push({ x, y });
+                    }
+                }
+                
+                // Sort points by x value to ensure correct path
+                points.sort((a, b) => a.x - b.x);
+                
+                if (points.length < 2) return ''; // Need at least 2 points after filtering
+                
+                // Generate the path data
+                const pathGenerator = d3.line()
+                    .x(d => d.x)
+                    .y(d => d.y)
+                    .curve(d3.curveMonotoneX); // Smooth curve
+                    
+                return pathGenerator(points);
+            }
+            
+            render() {
+                // Clear any existing content
+                this.container.innerHTML = '';
+                
+                // Create SVG
+                this.svg = d3.select(this.container)
+                    .append('svg')
+                    .attr('width', this.width)
+                    .attr('height', this.height);
+                
+                // Render grid
+                this.renderGrid();
+                
+                // Render axes
+                this.renderAxes();
+                
+                // Filter trains based on settings
+                const filteredTrains = this.trains.filter(train => {
+                    const category = train.train_category || '';
+                    
+                    // Passenger trains
+                    if (/^[A-F]|^[K-O]|^W/.test(category) && !this.showPassenger) {
+                        return false;
+                    }
+                    
+                    // Freight trains
+                    if (/^[G-J]|^[P-V]/.test(category) && !this.showFreight) {
+                        return false;
+                    }
+                    
+                    // ECS trains
+                    if (/^Z/.test(category) && !this.showECS) {
+                        return false;
+                    }
+                    
+                    return true;
+                });
+                
+                // Render trains
+                this.renderTrains(filteredTrains);
+                
+                // Setup interactions
+                this.setupInteractions();
+            }
+            
+            renderGrid() {
+                // Render horizontal grid lines (for locations)
+                this.locations.forEach(location => {
+                    const y = this.locationToY(location);
+                    
+                    this.svg.append('line')
+                        .attr('class', 'grid-line')
+                        .attr('x1', this.padding.left)
+                        .attr('y1', y)
+                        .attr('x2', this.width - this.padding.right)
+                        .attr('y2', y)
+                        .attr('stroke', '#495057')
+                        .attr('stroke-opacity', 0.2)
+                        .attr('stroke-width', 1)
+                        .attr('stroke-dasharray', '3,3');
+                });
+                
+                // Render vertical grid lines (for time, every hour)
+                for (let hour = 0; hour < 24; hour++) {
+                    const minutes = hour * 60;
+                    const x = this.timeScale(minutes);
+                    
+                    this.svg.append('line')
+                        .attr('class', 'grid-line')
+                        .attr('x1', x)
+                        .attr('y1', this.padding.top)
+                        .attr('x2', x)
+                        .attr('y2', this.height - this.padding.bottom)
+                        .attr('stroke', '#495057')
+                        .attr('stroke-opacity', 0.2)
+                        .attr('stroke-width', hour % 3 === 0 ? 1 : 0.5); // Thicker lines every 3 hours
+                }
+            }
+            
+            renderAxes() {
+                // Render location axis (Y-axis)
+                this.locations.forEach(location => {
+                    const y = this.locationToY(location);
+                    
+                    // Location tick
+                    this.svg.append('line')
+                        .attr('class', 'location-tick')
+                        .attr('x1', this.padding.left - 5)
+                        .attr('y1', y)
+                        .attr('x2', this.padding.left)
+                        .attr('y2', y)
+                        .attr('stroke', '#495057')
+                        .attr('stroke-width', 1);
+                    
+                    // Location label
+                    this.svg.append('text')
+                        .attr('class', 'location-label')
+                        .attr('x', this.padding.left - 10)
+                        .attr('y', y)
+                        .attr('text-anchor', 'end')
+                        .attr('dominant-baseline', 'middle')
+                        .attr('fill', '#adb5bd')
+                        .attr('font-size', '12px')
+                        .text(location);
+                });
+                
+                // Render time axis (X-axis)
+                for (let hour = 0; hour < 24; hour++) {
+                    const minutes = hour * 60;
+                    const x = this.timeScale(minutes);
+                    
+                    // Time tick
+                    this.svg.append('line')
+                        .attr('class', 'time-tick')
+                        .attr('x1', x)
+                        .attr('y1', this.height - this.padding.bottom)
+                        .attr('x2', x)
+                        .attr('y2', this.height - this.padding.bottom + (hour % 3 === 0 ? 8 : 4))
+                        .attr('stroke', '#495057')
+                        .attr('stroke-width', hour % 3 === 0 ? 1 : 0.5);
+                    
+                    // Time label (only show every 3 hours)
+                    if (hour % 3 === 0) {
+                        this.svg.append('text')
+                            .attr('class', 'time-label')
+                            .attr('x', x)
+                            .attr('y', this.height - this.padding.bottom + 20)
+                            .attr('text-anchor', 'middle')
+                            .attr('fill', '#6c757d')
+                            .attr('font-size', '10px')
+                            .text(`${hour.toString().padStart(2, '0')}:00`);
+                    }
+                }
+            }
+            
+            renderTrains(trains) {
+                trains.forEach(train => {
+                    const path = this.createTrainPath(train);
+                    if (!path) return; // Skip trains with insufficient data
+                    
+                    const category = train.train_category || '';
+                    let trainClass = 'train-line';
+                    
+                    // Add category class
+                    if (/^[A-F]|^[K-O]|^W/.test(category)) {
+                        trainClass += ' passenger';
+                    } else if (/^[G-J]|^[P-V]/.test(category)) {
+                        trainClass += ' freight';
+                    } else if (/^Z/.test(category)) {
+                        trainClass += ' ecs';
+                    } else {
+                        trainClass += ' other';
+                    }
+                    
+                    this.svg.append('path')
+                        .attr('class', trainClass)
+                        .attr('d', path)
+                        .attr('data-uid', train.uid)
+                        .attr('data-headcode', train.train_identity);
+                });
+            }
+            
+            setupInteractions() {
+                const self = this;
+                
+                // Train hover
+                d3.selectAll('.train-line')
+                    .on('mouseover', function(event) {
+                        const uid = this.getAttribute('data-uid');
+                        const headcode = this.getAttribute('data-headcode');
+                        const train = self.trains.find(t => t.uid === uid);
+                        
+                        if (train) {
+                            // Highlight the train
+                            d3.select(this).style('stroke-width', '4px');
+                            
+                            // Show tooltip
+                            const mouseX = event.pageX;
+                            const mouseY = event.pageY;
+                            
+                            // Build tooltip content
+                            const tooltip = document.getElementById('tooltip');
+                            tooltip.querySelector('.tooltip-title').textContent = headcode;
+                            
+                            let content = '<div>';
+                            
+                            // Category
+                            const category = train.train_category || '';
+                            let trainType = 'Unknown';
+                            if (/^[A-F]|^[K-O]|^W/.test(category)) {
+                                trainType = 'Passenger';
+                            } else if (/^[G-J]|^[P-V]/.test(category)) {
+                                trainType = 'Freight';
+                            } else if (/^Z/.test(category)) {
+                                trainType = 'Empty Coaching Stock';
+                            }
+                            content += `<div>Type: ${trainType}</div>`;
+                            
+                            // Locations
+                            content += '<div style="margin-top: 5px;">Schedule:</div>';
+                            content += '<div style="margin-left: 5px;">';
+                            
+                            const relevantLocations = train.locations
+                                .filter(loc => self.locations.includes(loc.tiploc))
+                                .sort((a, b) => a.sequence - b.sequence);
+                            
+                            relevantLocations.forEach(loc => {
+                                const arrStr = loc.arr ? `Arr: ${loc.arr}` : '';
+                                const depStr = loc.dep ? `Dep: ${loc.dep}` : '';
+                                const platformStr = loc.platform ? `Plat: ${loc.platform}` : '';
+                                content += `<div>${loc.tiploc} ${arrStr} ${depStr} ${platformStr}</div>`;
+                            });
+                            
+                            content += '</div></div>';
+                            
+                            tooltip.querySelector('.tooltip-content').innerHTML = content;
+                            
+                            // Position and show tooltip
+                            tooltip.style.left = `${mouseX + 10}px`;
+                            tooltip.style.top = `${mouseY + 10}px`;
+                            tooltip.style.display = 'block';
+                        }
+                    })
+                    .on('mouseout', function() {
+                        // Remove highlight
+                        d3.select(this).style('stroke-width', null);
+                        
+                        // Hide tooltip
+                        document.getElementById('tooltip').style.display = 'none';
+                    });
+            }
+        }
+        
+        // Generate graph event handler
+        document.getElementById('generate-graph').addEventListener('click', () => {
+            const date = document.getElementById('date-picker').value;
+            const locations = document.getElementById('location-select').value;
+            
+            if (!date || !locations) {
+                alert('Please select a date and locations');
+                return;
+            }
+            
+            // Generate sample train data
+            const trains = generateSampleData(locations);
+            
+            // Create and render train graph
+            const container = document.getElementById('train-graph');
+            new TrainGraph(container, trains, locations);
+        });
+        
+        // Checkbox event handlers
+        document.getElementById('show-passenger').addEventListener('change', () => {
+            if (document.getElementById('generate-graph').clicked) {
+                document.getElementById('generate-graph').click();
+            }
+        });
+        
+        document.getElementById('show-freight').addEventListener('change', () => {
+            if (document.getElementById('generate-graph').clicked) {
+                document.getElementById('generate-graph').click();
+            }
+        });
+        
+        document.getElementById('show-ecs').addEventListener('change', () => {
+            if (document.getElementById('generate-graph').clicked) {
+                document.getElementById('generate-graph').click();
+            }
+        });
+        
+        // Generate a graph on page load
+        window.addEventListener('load', () => {
+            document.getElementById('generate-graph').click();
+        });
+    </script>
+</body>
+</html>

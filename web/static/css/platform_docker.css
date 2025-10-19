@@ -1,0 +1,111 @@
+/* Platform Docker CSS */
+
+/* Graph container */
+.platform-graph-container {
+    width: 100%;
+    height: 600px;
+    background-color: #1e2124;
+    overflow: hidden;
+    position: relative;
+}
+
+/* Loading indicator */
+.loading-indicator {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+}
+
+.loading-spinner {
+    width: 40px;
+    height: 40px;
+    border: 4px solid rgba(255, 255, 255, 0.3);
+    border-radius: 50%;
+    border-top-color: #007bff;
+    animation: spin 1s ease-in-out infinite;
+}
+
+@keyframes spin {
+    to { transform: rotate(360deg); }
+}
+
+/* Train tooltip */
+.train-tooltip {
+    position: absolute;
+    background-color: #2a2e33;
+    border: 1px solid #3a3f47;
+    border-radius: 4px;
+    padding: 8px;
+    color: white;
+    font-size: 12px;
+    pointer-events: none;
+    z-index: 1000;
+    opacity: 0;
+    transition: opacity 0.2s;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+    max-width: 280px;
+}
+
+/* Form and input styling */
+.location-form {
+    padding: 20px;
+    background-color: #2a2e33;
+    border-radius: 5px;
+    margin-bottom: 20px;
+}
+
+.form-control {
+    background-color: #1e2124;
+    border-color: #3a3f47;
+    color: white;
+}
+
+.form-control:focus {
+    background-color: #1e2124;
+    border-color: #007bff;
+    color: white;
+    box-shadow: 0 0 0 0.2rem rgba(0, 123, 255, 0.25);
+}
+
+/* Button styling */
+.btn-generate {
+    background-color: #007bff;
+    border-color: #007bff;
+    width: 100%;
+}
+
+.btn-generate:hover, .btn-generate:focus {
+    background-color: #0069d9;
+    border-color: #0062cc;
+}
+
+/* Make sure SVG elements don't block mouse events */
+svg text {
+    -webkit-user-select: none;
+    -moz-user-select: none;
+    -ms-user-select: none;
+    user-select: none;
+}
+
+/* Card styling */
+.card.bg-dark {
+    border-color: #3a3f47;
+    background-color: #1e2124 !important;
+}
+
+.card-header {
+    background-color: #2a2e33;
+    border-bottom-color: #3a3f47;
+}
+
+/* Train visualization */
+.train-event {
+    cursor: pointer;
+    transition: opacity 0.2s;
+}
+
+.train-event:hover {
+    opacity: 0.8;
+}

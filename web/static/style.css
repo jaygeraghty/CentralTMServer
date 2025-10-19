@@ -1,0 +1,440 @@
+/* Custom styles for the Railway Schedules web interface */
+
+/* Time formatting for clearer display */
+.time-display {
+  font-family: monospace;
+  font-size: 1.1em;
+}
+
+/* Status badges */
+.badge.badge-regular {
+  background-color: var(--bs-secondary);
+}
+
+.badge.badge-cancelled {
+  background-color: var(--bs-danger);
+}
+
+.badge.badge-new {
+  background-color: var(--bs-success);
+}
+
+.badge.badge-changed {
+  background-color: var(--bs-warning);
+}
+
+/* Make sure tables are responsive */
+.table-responsive {
+  overflow-x: auto;
+}
+
+/* Ensure consistent spacing */
+.card {
+  margin-bottom: 1.5rem;
+}
+
+/* Add hover effect to table rows for better UX */
+.table-hover tbody tr:hover {
+  background-color: var(--bs-primary-bg-subtle);
+}
+
+/* Platform Docker Page Styles */
+.platform-docker-page {
+  background-color: #1a1d21;
+  color: #fff;
+  padding-bottom: 2rem;
+}
+
+.platform-docker-title {
+  color: #fff;
+}
+
+.platform-docker-card {
+  background-color: #2a2d35;
+  border: none;
+  border-radius: 8px;
+}
+
+.platform-docker-card .card-header {
+  background-color: #343a40;
+  color: #fff;
+  border-bottom: 1px solid #3a3f48;
+}
+
+.docker-time-input {
+  background-color: #343a40;
+  border: 1px solid #3a3f48;
+  color: #fff;
+}
+
+.docker-time-input:focus {
+  background-color: #343a40;
+  border-color: #6658ea;
+  box-shadow: 0 0 0 0.25rem rgba(102, 88, 234, 0.25);
+  color: #fff;
+}
+
+.generate-btn {
+  background-color: #6658ea;
+  border-color: #6658ea;
+}
+
+.generate-btn:hover {
+  background-color: #5448c8;
+  border-color: #5448c8;
+}
+
+/* Platform Docker Container - Simple Version */
+.platform-docker {
+  overflow-x: auto;
+  position: relative;
+  margin-top: 20px;
+  min-height: 500px;
+  width: 100%;
+}
+
+/* Timeline container for simple version */
+.platform-docker .time-axis {
+  position: relative;
+  height: 40px;
+  background-color: #343a40;
+  margin-bottom: 10px;
+}
+
+.platform-docker .hour-marker {
+  position: absolute;
+  top: 0;
+  font-size: 0.8rem;
+  color: white;
+  padding: 5px;
+  border-left: 2px solid rgba(255, 255, 255, 0.5);
+  height: 100%;
+}
+
+/* Timeline container for original version */
+.timeline-container {
+  /* Make the container wider for better 1-minute resolution */
+  width: 72000px; /* Default width - 50 pixels per minute = 50 * 1440 = 72000px for 24 hours */
+  position: relative;
+}
+
+.time-axis {
+  display: flex;
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  background-color: var(--bs-body-bg);
+  border-bottom: 1px solid var(--bs-border-color);
+  padding-bottom: 5px;
+  margin-bottom: 10px;
+  width: 100%;
+  position: relative;
+}
+
+.time-marker {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  background-color: rgba(255, 255, 255, 0.1);
+  z-index: 1;
+}
+
+.time-marker.hour {
+  background-color: rgba(255, 255, 255, 0.5);
+  width: 2px;
+}
+
+.time-label {
+  font-size: 0.8rem;
+  text-align: center;
+  position: absolute;
+  white-space: nowrap;
+  overflow: visible;
+  transform: translateX(-50%); /* Center the label on its position */
+}
+
+/* Style for hour labels (00:00, 01:00, etc) */
+.time-label.hour-label {
+  font-weight: bold;
+  color: var(--bs-light);
+  margin-top: -4px; /* Adjust vertical position */
+}
+
+/* Style for 5-minute interval labels */
+.time-label.minute-label {
+  font-size: 0.7rem;
+  color: var(--bs-gray-500);
+  margin-top: 4px; /* Position 5-minute labels slightly lower */
+}
+
+.platform-row {
+  display: flex;
+  height: 50px;
+  margin-bottom: 10px;
+  position: relative;
+  width: 100%;
+}
+
+.platform-label {
+  width: 100px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: bold;
+  background-color: var(--bs-secondary-bg);
+  border-radius: 4px 0 0 4px;
+  position: sticky;
+  left: 0;
+  z-index: 5;
+}
+
+.platform-timeline {
+  flex: 1;
+  position: relative;
+  border-radius: 0 4px 4px 0;
+  background-color: rgba(255, 255, 255, 0.05);
+  overflow: hidden;
+  height: 100%;
+}
+
+.train-event {
+  position: absolute;
+  height: 30px;
+  top: 10px;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 0.8rem;
+  color: white;
+  cursor: pointer;
+  overflow: visible;
+  z-index: 2;
+  padding: 0 2px;
+}
+
+.train-event.terminating {
+  background: linear-gradient(90deg, var(--bs-primary) 0%, var(--bs-danger) 100%);
+}
+
+.train-event.originating {
+  background: linear-gradient(90deg, var(--bs-success) 0%, var(--bs-primary) 100%);
+}
+
+.train-event.passing {
+  background-color: var(--bs-primary);
+}
+
+.train-event.terminating-with-association {
+  background: linear-gradient(90deg, var(--bs-primary) 0%, var(--bs-warning) 100%);
+}
+
+.train-event.originating-with-association {
+  background: linear-gradient(90deg, var(--bs-warning) 0%, var(--bs-primary) 100%);
+}
+
+.train-event.associated-train {
+  background: linear-gradient(90deg, var(--bs-info) 0%, var(--bs-info) 100%);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+}
+
+.train-event.combined-service {
+  background: linear-gradient(90deg, var(--bs-warning) 0%, var(--bs-success) 100%);
+  border: 2px solid var(--bs-primary);
+  z-index: 10; /* Make sure it appears above other trains */
+}
+
+.train-event.invalid-association {
+  /* Still use the association color but with a dashed border to show it's invalid */
+  background: linear-gradient(90deg, var(--bs-info) 0%, var(--bs-info) 100%);
+  border: 2px dashed var(--bs-danger);
+}
+
+.invalid-marker {
+  position: absolute;
+  right: -10px;
+  top: -10px;
+  background-color: var(--bs-danger);
+  color: white;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  font-weight: bold;
+  font-size: 14px;
+  z-index: 3;
+}
+
+.train-event.arrival-only {
+  background-color: var(--bs-danger);
+  width: 4px !important;
+  height: 40px;
+  top: 5px;
+}
+
+/* Train headcode labels */
+.headcode {
+  font-size: 0.7rem;
+  font-weight: bold;
+  white-space: nowrap;
+  padding: 2px 4px;
+  background-color: rgba(0, 0, 0, 0.3);
+  border-radius: 3px;
+  z-index: 3;
+}
+
+.headcode.inbound {
+  position: absolute;
+  left: 2px;
+}
+
+.outbound-container {
+  position: absolute;
+  right: 2px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+}
+
+.headcode.outbound {
+  margin: 1px 0;
+  position: relative;
+}
+
+.headcode.invalid-association {
+  background-color: rgba(220, 53, 69, 0.5); /* Red background for invalid */
+}
+
+/* Labels for associated trains */
+.arriving-train-label {
+  position: absolute;
+  left: 2px;
+  top: 4px;
+  font-size: 0.7rem;
+  font-weight: bold;
+  padding: 1px 4px;
+  background-color: rgba(0, 0, 0, 0.6);
+  border-radius: 3px;
+  white-space: nowrap;
+  color: white;
+  z-index: 4;
+}
+
+.departing-train-label {
+  position: absolute;
+  right: 2px;
+  top: 4px;
+  font-size: 0.7rem;
+  font-weight: bold;
+  padding: 1px 4px;
+  background-color: rgba(0, 0, 0, 0.6);
+  border-radius: 3px;
+  white-space: nowrap;
+  color: white;
+  z-index: 4;
+}
+
+.invalid-marker {
+  position: absolute;
+  top: 0px;
+  right: -20px; /* Position outside the box */
+  width: 18px;
+  height: 18px;
+  background-color: var(--bs-danger);
+  color: white;
+  border-radius: 50%;
+  text-align: center;
+  line-height: 18px;
+  font-weight: bold;
+  font-size: 12px;
+  box-shadow: 0 0 3px rgba(0, 0, 0, 0.3);
+  cursor: help;
+  z-index: 5;
+}
+
+.invalid-marker:hover {
+  transform: scale(1.1);
+  background-color: #ff0000;
+}
+
+.train-label {
+  position: absolute;
+  top: 8px;
+  font-size: 0.7rem;
+  color: white;
+  background-color: rgba(0, 0, 0, 0.7);
+  padding: 2px 4px;
+  border-radius: 3px;
+  z-index: 3;
+}
+
+.train-event:hover {
+  filter: brightness(1.2);
+  z-index: 10;
+}
+
+.tooltip-inner {
+  max-width: 300px;
+  text-align: left;
+}
+
+/* Responsive design for platform docker */
+@media (max-width: 768px) {
+  .platform-docker {
+    overflow-x: scroll;
+  }
+  
+  .platform-label {
+    width: 60px;
+    font-size: 0.8rem;
+  }
+  
+  .time-label {
+    font-size: 0.7rem;
+  }
+}
+
+/* Zoom controls */
+.zoom-controls {
+  position: fixed;
+  bottom: 20px;
+  right: 20px;
+  z-index: 1000;
+}
+
+/* Additional controls for our interface */
+.zoom-controls-container {
+  display: flex;
+  justify-content: center;
+  margin-top: 1rem;
+}
+
+.btn-zoom {
+  background-color: #343a40;
+  color: #fff;
+  border: none;
+  margin: 0 0.25rem;
+  border-radius: 4px;
+  padding: 0.5rem 1rem;
+}
+
+.btn-zoom:hover, .btn-zoom:focus {
+  background-color: #6658ea;
+  color: #fff;
+}
+
+/* Time range slider */
+.time-range-slider {
+  margin: 20px 0;
+}
+
+/* Time filters */
+.time-filter {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 15px;
+}

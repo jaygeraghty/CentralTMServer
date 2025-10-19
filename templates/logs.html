@@ -1,0 +1,329 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Active Trains API Logs</title>
+    <style>
+        body {
+            font-family: 'Courier New', monospace;
+            margin: 0;
+            padding: 20px;
+            background-color: #1e1e1e;
+            color: #d4d4d4;
+            line-height: 1.4;
+        }
+        .header {
+            background-color: #2d2d30;
+            padding: 15px;
+            border-radius: 5px;
+            margin-bottom: 20px;
+            border-left: 4px solid #007acc;
+        }
+        .header h1 {
+            margin: 0 0 10px 0;
+            color: #ffffff;
+        }
+        .stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+        .stat-card {
+            background-color: #2d2d30;
+            padding: 15px;
+            border-radius: 5px;
+            border-left: 3px solid #007acc;
+        }
+        .stat-label {
+            font-size: 12px;
+            color: #858585;
+            text-transform: uppercase;
+            margin-bottom: 5px;
+        }
+        .stat-value {
+            font-size: 18px;
+            font-weight: bold;
+            color: #ffffff;
+        }
+        .controls {
+            background-color: #2d2d30;
+            padding: 15px;
+            border-radius: 5px;
+            margin-bottom: 20px;
+            display: flex;
+            gap: 15px;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+        .controls label {
+            color: #d4d4d4;
+            font-weight: bold;
+        }
+        .controls input, .controls select, .controls button {
+            padding: 8px 12px;
+            border: 1px solid #464647;
+            border-radius: 3px;
+            background-color: #3c3c3c;
+            color: #d4d4d4;
+            font-family: inherit;
+        }
+        .controls button {
+            background-color: #007acc;
+            color: white;
+            cursor: pointer;
+            border: none;
+        }
+        .controls button:hover {
+            background-color: #005a9e;
+        }
+        .log-container {
+            background-color: #1e1e1e;
+            border: 1px solid #464647;
+            border-radius: 5px;
+            height: 600px;
+            overflow-y: auto;
+            padding: 15px;
+            font-size: 13px;
+        }
+        .log-line {
+            margin-bottom: 2px;
+            word-wrap: break-word;
+            white-space: pre-wrap;
+            border-bottom: 1px solid #2d2d30;
+            padding-bottom: 1px;
+        }
+        .log-line:hover {
+            background-color: #2d2d30;
+        }
+        .log-timestamp {
+            color: #608b4e;
+        }
+        .log-level-INFO {
+            color: #4fc1ff;
+        }
+        .log-level-WARNING {
+            color: #ffcc02;
+        }
+        .log-level-ERROR {
+            color: #f44747;
+        }
+        .log-level-CRITICAL {
+            color: #ff6b6b;
+        }
+        .log-level-DEBUG {
+            color: #858585;
+        }
+        .log-module {
+            color: #9cdcfe;
+        }
+        .log-message {
+            color: #d4d4d4;
+        }
+        .loading {
+            text-align: center;
+            color: #858585;
+            padding: 50px;
+        }
+        .error {
+            color: #f44747;
+            background-color: #2d1b1b;
+            padding: 15px;
+            border-radius: 5px;
+            border-left: 4px solid #f44747;
+            margin-bottom: 20px;
+        }
+        .auto-refresh {
+            color: #608b4e;
+            font-size: 12px;
+        }
+        .filter-container {
+            margin-bottom: 10px;
+        }
+        .filter-container input {
+            width: 300px;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>🚂 Active Trains API Logs</h1>
+        <p>Real-time monitoring of API activity and system events</p>
+    </div>
+
+    <div class="stats" id="statsContainer">
+        <div class="stat-card">
+            <div class="stat-label">Log File Size</div>
+            <div class="stat-value" id="fileSize">Loading...</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-label">Total Lines</div>
+            <div class="stat-value" id="totalLines">Loading...</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-label">Displayed Lines</div>
+            <div class="stat-value" id="displayedLines">Loading...</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-label">Last Modified</div>
+            <div class="stat-value" id="lastModified">Loading...</div>
+        </div>
+    </div>
+
+    <div class="controls">
+        <label for="lineCount">Lines to display:</label>
+        <select id="lineCount">
+            <option value="100">100</option>
+            <option value="200">200</option>
+            <option value="500" selected>500</option>
+            <option value="1000">1000</option>
+            <option value="2000">2000</option>
+        </select>
+
+        <label for="autoRefresh">Auto-refresh:</label>
+        <select id="autoRefresh">
+            <option value="0">Off</option>
+            <option value="5">5 seconds</option>
+            <option value="10" selected>10 seconds</option>
+            <option value="30">30 seconds</option>
+            <option value="60">1 minute</option>
+        </select>
+
+        <button onclick="refreshLogs()">Refresh Now</button>
+        <button onclick="clearFilter()">Clear Filter</button>
+        
+        <span class="auto-refresh" id="refreshStatus"></span>
+    </div>
+
+    <div class="filter-container">
+        <label for="logFilter">Filter logs:</label>
+        <input type="text" id="logFilter" placeholder="Filter by text, level, module, etc..." oninput="filterLogs()">
+    </div>
+
+    <div class="log-container" id="logContainer">
+        <div class="loading">Loading logs...</div>
+    </div>
+
+    <script>
+        let autoRefreshInterval;
+        let currentLogs = [];
+        let filteredLogs = [];
+
+        function formatLogLine(line) {
+            // Parse log line format: YYYY-MM-DD HH:MM:SS BST - module - LEVEL - message
+            const logPattern = /^(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}) BST - ([^-]+) - (\w+) - (.+)$/;
+            const match = line.match(logPattern);
+            
+            if (match) {
+                const [, timestamp, module, level, message] = match;
+                return `<span class="log-timestamp">${timestamp}</span> BST - <span class="log-module">${module.trim()}</span> - <span class="log-level-${level}">${level}</span> - <span class="log-message">${message}</span>`;
+            }
+            
+            // Fallback for lines that don't match the pattern
+            return `<span class="log-message">${line}</span>`;
+        }
+
+        function displayLogs(logs) {
+            const container = document.getElementById('logContainer');
+            
+            if (!logs || logs.length === 0) {
+                container.innerHTML = '<div class="loading">No logs available</div>';
+                return;
+            }
+
+            const logHtml = logs.map(line => 
+                `<div class="log-line">${formatLogLine(line.trim())}</div>`
+            ).join('');
+            
+            container.innerHTML = logHtml;
+            
+            // Auto-scroll to bottom
+            container.scrollTop = container.scrollHeight;
+        }
+
+        function filterLogs() {
+            const filterText = document.getElementById('logFilter').value.toLowerCase();
+            
+            if (!filterText) {
+                filteredLogs = currentLogs;
+            } else {
+                filteredLogs = currentLogs.filter(line => 
+                    line.toLowerCase().includes(filterText)
+                );
+            }
+            
+            displayLogs(filteredLogs);
+            document.getElementById('displayedLines').textContent = filteredLogs.length;
+        }
+
+        function clearFilter() {
+            document.getElementById('logFilter').value = '';
+            filterLogs();
+        }
+
+        function updateStats(stats) {
+            if (stats.error) {
+                document.getElementById('statsContainer').innerHTML = 
+                    `<div class="error">Error loading stats: ${stats.error}</div>`;
+                return;
+            }
+
+            document.getElementById('fileSize').textContent = stats.size_mb ? `${stats.size_mb} MB` : 'Unknown';
+            document.getElementById('totalLines').textContent = stats.line_count || 'Unknown';
+            document.getElementById('lastModified').textContent = stats.modified || 'Unknown';
+        }
+
+        async function refreshLogs() {
+            try {
+                const lineCount = document.getElementById('lineCount').value;
+                const response = await fetch(`/api/trains/logs?lines=${lineCount}`);
+                const data = await response.json();
+                
+                if (data.error) {
+                    document.getElementById('logContainer').innerHTML = 
+                        `<div class="error">Error: ${data.error}<br>Message: ${data.message}</div>`;
+                    return;
+                }
+                
+                currentLogs = data.logs || [];
+                updateStats(data.stats || {});
+                filterLogs(); // Apply current filter to new logs
+                
+                // Update refresh status
+                const now = new Date().toLocaleTimeString();
+                document.getElementById('refreshStatus').textContent = `Last updated: ${now}`;
+                
+            } catch (error) {
+                document.getElementById('logContainer').innerHTML = 
+                    `<div class="error">Network error: ${error.message}</div>`;
+            }
+        }
+
+        function setupAutoRefresh() {
+            const interval = parseInt(document.getElementById('autoRefresh').value);
+            
+            // Clear existing interval
+            if (autoRefreshInterval) {
+                clearInterval(autoRefreshInterval);
+                autoRefreshInterval = null;
+            }
+            
+            if (interval > 0) {
+                autoRefreshInterval = setInterval(refreshLogs, interval * 1000);
+                document.getElementById('refreshStatus').textContent = `Auto-refreshing every ${interval}s`;
+            } else {
+                document.getElementById('refreshStatus').textContent = '';
+            }
+        }
+
+        // Event listeners
+        document.getElementById('lineCount').addEventListener('change', refreshLogs);
+        document.getElementById('autoRefresh').addEventListener('change', setupAutoRefresh);
+
+        // Initial load
+        refreshLogs();
+        setupAutoRefresh();
+    </script>
+</body>
+</html>

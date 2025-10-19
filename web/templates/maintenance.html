@@ -1,0 +1,253 @@
+{% extends "base.html" %}
+
+{% block title %}Database Maintenance{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="row">
+        <div class="col-md-12">
+            <h1>Database Maintenance</h1>
+            <div class="alert alert-warning">
+                <h4 class="alert-heading">Warning!</h4>
+                <p>This page allows you to reset and reload the database with CIF files from the import folder.</p>
+                <p><strong>This operation will delete all existing data and replace it with data from the CIF files in the import folder.</strong></p>
+            </div>
+
+            <!-- Flash messages -->
+            {% with messages = get_flashed_messages(with_categories=true) %}
+                {% if messages %}
+                    {% for category, message in messages %}
+                        <div class="alert alert-{{ category }}">{{ message }}</div>
+                    {% endfor %}
+                {% endif %}
+            {% endwith %}
+
+            <div class="card mt-4">
+                <div class="card-header">
+                    <h5>Reset Database and Load CIF Files</h5>
+                </div>
+                <div class="card-body">
+                    <p>This operation will:</p>
+                    <ol>
+                        <li>Delete all existing schedule data from the database</li>
+                        <li>Process all CIF files located in the import folder</li>
+                        <li>Load the processed data into the database</li>
+                    </ol>
+                    <p>Make sure you have placed the CIF files you want to load in the import folder before proceeding.</p>
+
+                    <div class="mt-3">
+                        <form method="post" action="{{ url_for('web.reset_reload_db') }}" onsubmit="return confirm('Are you sure? This will delete all existing data.');">
+                            <input type="hidden" name="action" value="reset">
+                            <button type="submit" class="btn btn-danger">Reset Database and Load CIF Files</button>
+                        </form>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card mt-4">
+                <div class="card-header">
+                    <h5>Database Status</h5>
+                </div>
+                <div class="card-body">
+                    <div id="db-status">
+                        <p>Database contains:</p>
+                        <ul id="status-list">
+                            <li>Permanent schedules (P): <span id="ltp-count">Loading...</span></li>
+                            <li>New schedules (N): <span id="new-count">Loading...</span></li>
+                            <li>Overlay schedules (O): <span id="overlay-count">Loading...</span></li>
+                            <li>Cancellation schedules (C): <span id="cancel-count">Loading...</span></li>
+                        </ul>
+
+                        <div id="assoc-container" style="display:none;">
+                            <h6>Associations:</h6>
+                            <ul id="assoc-list">
+                                <li>Permanent associations (P): <span id="ltp-assoc-count">0</span></li>
+                                <li>New associations (N): <span id="new-assoc-count">0</span></li>
+                                <li>Overlay associations (O): <span id="overlay-assoc-count">0</span></li>
+                                <li>Cancellation associations (C): <span id="cancel-assoc-count">0</span></li>
+                            </ul>
+                        </div>
+
+                        <div id="loc-container" style="display:none;">
+                            <h6>Schedule Locations:</h6>
+                            <ul id="loc-list">
+                                <li>Permanent locations (P): <span id="ltp-loc-count">0</span></li>
+                                <li>New locations (N): <span id="new-loc-count">0</span></li>
+                                <li>Overlay locations (O): <span id="overlay-loc-count">0</span></li>
+                                <li>Cancellation locations (C): <span id="cancel-loc-count">0</span></li>
+                            </ul>
+                        </div>
+
+                        <button id="refresh-status" class="btn btn-secondary">Refresh Status</button>
+                        <button id="toggle-details" class="btn btn-info ml-2">Show Details</button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="mt-4">
+                <a href="{{ url_for('web.index') }}" class="btn btn-primary">Back to Home</a>
+            </div>
+        </div>
+
+        <!-- API Simulation Section -->
+        <div class="card mt-4">
+            <div class="card-header">
+                <h2 style="margin: 0; font-size: 1.25rem;">API Simulation</h2>
+            </div>
+            <div class="card-body">
+                <p>Test the API endpoints with dummy data calls.</p>
+                <div class="d-grid gap-2">
+                    <button type="button" class="btn btn-primary" onclick="simulateApiCalls()">
+                        Simulate API Calls
+                    </button>
+                </div>
+                <div id="apiSimulationResult" class="mt-3" style="display: none;">
+                    <div class="alert alert-info">
+                        <strong>API Simulation Results:</strong>
+                        <pre id="apiSimulationOutput"></pre>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    // Function to fetch database status
+    function fetchDatabaseStatus() {
+        fetch('/web/db-status')
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    // Update schedule counts
+                    document.getElementById('ltp-count').textContent = data.counts.permanent || 0;
+                    document.getElementById('new-count').textContent = data.counts.new || 0;
+                    document.getElementById('overlay-count').textContent = data.counts.overlay || 0;
+                    document.getElementById('cancel-count').textContent = data.counts.cancellation || 0;
+
+                    // Update association counts if available
+                    if (data.associations) {
+                        document.getElementById('ltp-assoc-count').textContent = data.associations.permanent || 0;
+                        document.getElementById('new-assoc-count').textContent = data.associations.new || 0;
+                        document.getElementById('overlay-assoc-count').textContent = data.associations.overlay || 0;
+                        document.getElementById('cancel-assoc-count').textContent = data.associations.cancellation || 0;
+                    }
+
+                    // Update location counts if available
+                    if (data.locations) {
+                        document.getElementById('ltp-loc-count').textContent = data.locations.permanent || 0;
+                        document.getElementById('new-loc-count').textContent = data.locations.new || 0;
+                        document.getElementById('overlay-loc-count').textContent = data.locations.overlay || 0;
+                        document.getElementById('cancel-loc-count').textContent = data.locations.cancellation || 0;
+                    }
+                } else {
+                    document.getElementById('db-status').innerHTML = '<p class="text-danger">Error fetching database status.</p>';
+                }
+            })
+            .catch(error => {
+                document.getElementById('db-status').innerHTML = `<p class="text-danger">Error: ${error.message}</p>`;
+            });
+    }
+
+    // Toggle details visibility
+    let detailsVisible = false;
+    function toggleDetails() {
+        const assocContainer = document.getElementById('assoc-container');
+        const locContainer = document.getElementById('loc-container');
+        const toggleBtn = document.getElementById('toggle-details');
+
+        if (detailsVisible) {
+            assocContainer.style.display = 'none';
+            locContainer.style.display = 'none';
+            toggleBtn.textContent = 'Show Details';
+        } else {
+            assocContainer.style.display = 'block';
+            locContainer.style.display = 'block';
+            toggleBtn.textContent = 'Hide Details';
+        }
+
+        detailsVisible = !detailsVisible;
+    }
+
+    // Set up event handlers on page load
+    document.addEventListener('DOMContentLoaded', function() {
+        // Fetch initial status
+        fetchDatabaseStatus();
+
+        // Set up refresh button
+        document.getElementById('refresh-status').addEventListener('click', fetchDatabaseStatus);
+
+        // Set up toggle button
+        document.getElementById('toggle-details').addEventListener('click', toggleDetails);
+    });
+
+    function resetReloadDatabase() {
+        if (confirm('Are you sure you want to reset and reload the database? This will delete all existing data.')) {
+            const button = event.target;
+            button.disabled = true;
+            button.textContent = 'Processing...';
+
+            fetch('/web/reset-reload-db', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                }
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    alert('Database reset and reload completed successfully!');
+                    location.reload();
+                } else {
+                    alert('Error: ' + data.message);
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                alert('An error occurred while resetting the database.');
+            })
+            .finally(() => {
+                button.disabled = false;
+                button.textContent = 'Reset & Reload Database';
+            });
+        }
+    }
+
+    function simulateApiCalls() {
+        const button = event.target;
+        const resultDiv = document.getElementById('apiSimulationResult');
+        const outputElement = document.getElementById('apiSimulationOutput');
+
+        button.disabled = true;
+        button.textContent = 'Simulating...';
+
+        fetch('/web/simulate-api-calls', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            }
+        })
+        .then(response => response.json())
+        .then(data => {
+            resultDiv.style.display = 'block';
+            outputElement.textContent = JSON.stringify(data, null, 2);
+
+            if (data.success) {
+                resultDiv.querySelector('.alert').className = 'alert alert-success';
+            } else {
+                resultDiv.querySelector('.alert').className = 'alert alert-danger';
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            resultDiv.style.display = 'block';
+            resultDiv.querySelector('.alert').className = 'alert alert-danger';
+            outputElement.textContent = 'Error: ' + error.message;
+        })
+        .finally(() => {
+            button.disabled = false;
+            button.textContent = 'Simulate API Calls';
+        });
+    }
+</script>
+{% endblock %}
